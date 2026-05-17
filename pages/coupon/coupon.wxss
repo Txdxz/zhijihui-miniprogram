@@ -1,0 +1,741 @@
+/* pages/coupon/coupon.wxss — 卡包（Vant + 参考图：留白、字号、底部安全区） */
+
+.page {
+  min-height: 100vh;
+  background: #F5F7FA;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.hero {
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  padding: 40rpx 32rpx 56rpx;
+  padding-top: calc(40rpx + env(safe-area-inset-top));
+}
+
+.hero-title {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.35;
+  letter-spacing: 0.5rpx;
+}
+
+.hero-sub {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.45;
+}
+
+.sheet {
+  margin: -28rpx 24rpx 24rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx 24rpx;
+  box-shadow: 0 8rpx 28rpx rgba(22, 119, 255, 0.08);
+  position: relative;
+  z-index: 1;
+}
+
+.sheet.first-sheet {
+  margin-top: -36rpx;
+}
+
+.summary-sheet {
+  padding: 32rpx 20rpx;
+}
+
+.summary-grid {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+.summary-col {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+
+.summary-vdiv {
+  height: auto !important;
+  margin: 0 8rpx !important;
+}
+
+.summary-num {
+  display: block;
+  font-size: 48rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.summary-num.num-ok {
+  color: #07c160;
+}
+
+.summary-num.num-muted {
+  color: #333;
+}
+
+.summary-label {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.35;
+}
+
+.list-sheet {
+  padding: 8rpx 0 20rpx;
+}
+
+.tips-sheet {
+  margin-top: 8rpx;
+}
+
+.tabbar-spacer {
+  height: calc(112rpx + env(safe-area-inset-bottom));
+}
+
+.empty-btn {
+  margin-top: 24rpx !important;
+}
+
+/* 核销弹层 */
+.verify-popup {
+  width: 86vw;
+  max-width: 640rpx;
+}
+
+.modal-inner {
+  padding: 40rpx 32rpx 36rpx;
+  box-sizing: border-box;
+}
+
+.modal-inner .modal-title {
+  display: block;
+  text-align: center;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 12rpx;
+}
+
+.verify-tip {
+  display: block;
+  text-align: center;
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 24rpx;
+  line-height: 1.5;
+}
+
+.modal-inner .qrcode-canvas {
+  display: block;
+  margin: 0 auto 20rpx;
+  border-radius: 16rpx;
+}
+
+/* 二维码容器 - 阻止滚动穿透 */
+.qrcode-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.code-row .code-number {
+  font-size: 44rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+  font-family: ui-monospace, Menlo, monospace;
+  color: #1a1a1a;
+}
+
+.modal-inner .code-hint {
+  display: block;
+  text-align: center;
+  font-size: 24rpx;
+  color: #ee0a24;
+  margin-bottom: 12rpx;
+}
+
+.modal-cells {
+  margin: 16rpx 0 24rpx !important;
+}
+
+.use-btn {
+  margin-top: 16rpx !important;
+}
+
+.use-btn.muted-btn {
+  opacity: 0.7;
+}
+
+/* ========== 错误状态 ========== */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 80rpx 40rpx;
+  text-align: center;
+}
+
+.error-state__icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.6;
+}
+
+.error-state__text {
+  font-size: 28rpx;
+  color: #999999;
+  margin-bottom: 32rpx;
+}
+
+.retry-btn {
+  background: #1677FF;
+  color: #FFFFFF;
+  border-radius: 100rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  padding: 16rpx 48rpx;
+}
+
+/* ========== 旧类保留兼容（历史引用） ========== */
+.container {
+  min-height: 100vh;
+  background: #F5F7FA;
+  padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
+}
+
+.header {
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  padding: 32rpx 32rpx 48rpx;
+  padding-top: calc(32rpx + env(safe-area-inset-top));
+}
+
+.header-title {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 8rpx;
+  line-height: 1.3;
+}
+
+.header-subtitle {
+  font-size: 26rpx;
+  color: rgba(255,255,255,0.8);
+}
+
+/* ========== 无合约提示（微信规范：空状态） ========== */
+.empty-card {
+  margin: 24rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 80rpx 32rpx;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 96rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-text {
+  display: block;
+  font-size: 36rpx;
+  color: #333333;
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+
+.empty-hint {
+  display: block;
+  font-size: 28rpx;
+  color: #999999;
+  margin-bottom: 40rpx;
+}
+
+/* ========== 汇总卡片（微信规范：清晰的数据展示） ========== */
+.summary-card {
+  margin: 24rpx;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 32rpx 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 10;
+}
+
+.summary-card .summary-item {
+  text-align: center;
+  flex: 1;
+}
+
+.summary-card .summary-num {
+  display: block;
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.summary-card .summary-label {
+  font-size: 26rpx;
+  color: #999999;
+  margin-top: 4rpx;
+}
+
+.summary-card .summary-divider {
+  width: 1rpx;
+  height: 64rpx;
+  background: #E5E5E5;
+}
+
+.color-success { color: #07C160; }
+.color-grey { color: #999999; }
+
+/* ========== 代金券列表（微信规范：便捷的操作体验） ========== */
+.coupon-list {
+  padding: 0 24rpx;
+}
+
+.coupon-item {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  margin-bottom: 20rpx;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.coupon-item:active {
+  transform: scale(0.98);
+}
+
+.coupon-item.pending {
+  background: #F5F5F5;
+  opacity: 0.7;
+}
+
+.coupon-status-box.pending .status-text {
+  color: #999;
+}
+
+.coupon-status-box.pending .status-hint {
+  color: #bbb;
+  font-size: 11px;
+}
+
+.coupon-item.used {
+  background: #FAFAFA;
+  opacity: 0.7;
+}
+
+.coupon-item.expired {
+  background: #F0F0F0;
+  opacity: 0.5;
+}
+
+/* 非当月代金券 - 置灰显示 */
+.coupon-item.not-current-month {
+  background: #FAFAFA;
+  opacity: 0.65;
+}
+
+.coupon-item.not-current-month .coupon-left {
+  background: #C0C0C0;
+}
+
+/* 本月已用完 */
+.coupon-item.monthly-used-up {
+  background: #F5F5F5;
+  opacity: 0.7;
+}
+
+.coupon-item.monthly-used-up .coupon-left {
+  background: #999999;
+}
+
+.coupon-status-box.monthly-used-up {
+  background: #F0F0F0;
+}
+
+.coupon-status-box.monthly-used-up .status-text {
+  color: #666;
+}
+
+.coupon-left {
+  flex: 0 0 200rpx;
+  background: linear-gradient(135deg, #FF6B6B 0%, #FF4757 100%);
+  padding: 32rpx 20rpx;
+  color: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.coupon-item.pending .coupon-left,
+.coupon-item.used .coupon-left,
+.coupon-item.expired .coupon-left {
+  background: #D9D9D9;
+}
+
+.coupon-amount {
+  display: flex;
+  align-items: baseline;
+}
+
+.coupon-yen {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.coupon-num {
+  font-size: 64rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.coupon-store {
+  font-size: 24rpx;
+  opacity: 0.9;
+  margin-top: 12rpx;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.coupon-right {
+  flex: 1;
+  padding: 24rpx 20rpx 24rpx 24rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.coupon-month {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+
+.coupon-status-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-text {
+  font-size: 28rpx;
+  color: #07C160;
+  font-weight: 600;
+}
+
+.status-text.muted {
+  color: #999999;
+}
+
+.status-text.used {
+  color: #999999;
+}
+
+.status-hint {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 4rpx;
+}
+
+/* 微信规范：使用按钮热区 ≥ 7mm */
+.use-btn-wrap {
+  margin-top: 12rpx;
+}
+
+.use-btn {
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  transition: transform 0.15s ease;
+}
+
+.use-btn:active {
+  transform: scale(0.95);
+}
+
+.coupon-corner {
+  position: absolute;
+  right: 180rpx;
+  top: 0;
+  bottom: 0;
+  width: 24rpx;
+  background: radial-gradient(circle at 0 0, transparent 12rpx, #F5F7FA 12rpx);
+  background-size: 24rpx 24rpx;
+}
+
+/* ========== 使用说明 ========== */
+.tips-card {
+  margin: 24rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 32rpx;
+}
+
+.tips-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 24rpx;
+}
+
+.tips-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.tips-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.tips-num {
+  flex-shrink: 0;
+  width: 40rpx;
+  height: 40rpx;
+  background: #E6F0FF;
+  color: #1677FF;
+  font-size: 24rpx;
+  font-weight: 600;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tips-text {
+  font-size: 28rpx;
+  color: #666666;
+  line-height: 1.6;
+  flex: 1;
+}
+
+/* ========== 核销码弹窗（微信规范：简洁优雅） ========== */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  width: 640rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx;
+  margin: 0 32rpx;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32rpx;
+}
+
+.modal-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.modal-close {
+  font-size: 56rpx;
+  color: #999999;
+  line-height: 1;
+  padding: 8rpx;
+}
+
+.verify-code-box {
+  background: #F5F7FA;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.verify-tip {
+  font-size: 28rpx;
+  color: #666666;
+  margin-bottom: 24rpx;
+}
+
+.code-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+}
+
+.code-number {
+  font-size: 64rpx;
+  font-weight: 700;
+  color: #1A1A1A;
+  letter-spacing: 8rpx;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
+}
+
+.code-countdown {
+  font-size: 28rpx;
+  color: #07C160;
+  background: #E8F8EF;
+  padding: 12rpx 20rpx;
+  border-radius: 12rpx;
+}
+
+.code-countdown.warning {
+  color: #FA5151;
+  background: #FFEDED;
+}
+
+.code-hint {
+  font-size: 24rpx;
+  color: #FA5151;
+  margin-top: 16rpx;
+}
+
+/* 二维码展示区域 */
+.qrcode-section {
+  background: #F5F7FA;
+  border-radius: 20rpx;
+  padding: 32rpx;
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.qrcode-canvas {
+  width: 320rpx;
+  height: 320rpx;
+  margin: 0 auto 24rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 16rpx rgba(22, 119, 255, 0.1);
+}
+
+/* 复制按钮 */
+.copy-code-btn {
+  margin-top: 16rpx;
+  padding: 16rpx 32rpx;
+  font-size: 28rpx;
+  color: #1677FF;
+  background: transparent;
+  border: none;
+  min-height: auto;
+}
+
+.copy-code-btn:active {
+  opacity: 0.6;
+}
+
+.modal-info {
+  background: #F5F7FA;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8rpx 0;
+}
+
+.info-item + .info-item {
+  border-top: 1rpx solid #E5E5E5;
+  margin-top: 8rpx;
+  padding-top: 16rpx;
+}
+
+.info-label {
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.info-value {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 600;
+}
+
+/* ========== 按钮（微信规范：友好的点击反馈） ========== */
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  color: #FFFFFF;
+  border-radius: 100rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  min-height: 96rpx;
+  padding: 24rpx 48rpx;
+  line-height: 1.4;
+  text-align: center;
+  border: none;
+  margin-top: 24rpx;
+  display: block;
+  box-sizing: border-box;
+  transition: transform 0.15s ease;
+}
+
+.btn-primary:active {
+  transform: scale(0.96);
+}
+
+.btn-secondary {
+  width: 100%;
+  background: #FFFFFF;
+  color: #1677FF;
+  border: 2rpx solid #1677FF;
+  border-radius: 100rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  min-height: 96rpx;
+  padding: 22rpx 48rpx;
+  line-height: 1.4;
+  text-align: center;
+  margin-top: 16rpx;
+  display: block;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:active {
+  background: rgba(22, 119, 255, 0.08);
+  transform: scale(0.96);
+}

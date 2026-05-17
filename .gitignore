@@ -1,0 +1,21 @@
+# 依赖
+node_modules
+miniprogram_npm
+package-lock.json
+cloudfunctions/*/package-lock.json
+
+# 自动生成
+__privacy__.json
+project.private.config.json
+
+# IDE / 工具
+.claude
+.DS_Store
+*.log
+
+# 文档附件（非代码）
+*.docx
+*.txt
+
+# 测试工具
+minitest

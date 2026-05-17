@@ -1,0 +1,12 @@
+{
+  "navigationBarTitleText": "智机惠",
+  "navigationBarBackgroundColor": "#1677FF",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#F1F6FF",
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-field": "@vant/weapp/field/index",
+    "van-popup": "@vant/weapp/popup/index",
+    "van-loading": "@vant/weapp/loading/index"
+  }
+}

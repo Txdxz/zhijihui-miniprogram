@@ -1,0 +1,152 @@
+<view class="page">
+  <!-- 骨架屏 -->
+  <skeleton wx:if="{{pageLoading}}" loading="{{pageLoading}}" type="card" item-count="2" />
+
+  <!-- 错误状态 -->
+  <view wx:elif="{{pageError}}" class="error-state">
+    <view class="error-state__icon">⚠️</view>
+    <text class="error-state__text">{{pageError}}</text>
+    <button class="retry-btn" bindtap="onPullDownRefresh" size="mini">重试</button>
+  </view>
+
+  <block wx:else>
+  <view class="hero">
+    <text class="hero-title">我的卡包</text>
+    <text class="hero-sub">合约办理成功即可获得权益礼包</text>
+  </view>
+
+  <view class="sheet" wx:if="{{!hasContract}}">
+    <van-empty description="完成合约办理后即可获得代金券">
+      <van-button type="primary" size="small" round custom-class="empty-btn" bind:click="goToIndex">去办理合约</van-button>
+    </van-empty>
+  </view>
+
+  <block wx:if="{{hasContract}}">
+    <view class="sheet summary-sheet first-sheet">
+      <view class="summary-grid">
+        <view class="summary-col">
+          <text class="summary-num num-ok">{{availableCount}}</text>
+          <text class="summary-label">可使用</text>
+        </view>
+        <van-divider vertical custom-class="summary-vdiv" />
+        <view class="summary-col">
+          <text class="summary-num num-muted">{{usedCount}}</text>
+          <text class="summary-label">已使用</text>
+        </view>
+        <van-divider vertical custom-class="summary-vdiv" />
+        <view class="summary-col">
+          <text class="summary-num num-muted">{{totalCount}}</text>
+          <text class="summary-label">共 {{totalCount}} 张</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="sheet list-sheet">
+      <view class="coupon-item {{item.statusClass}}" wx:for="{{coupons}}" wx:key="id">
+        <view class="coupon-left">
+          <view class="coupon-amount">
+            <text class="coupon-yen">¥</text>
+            <text class="coupon-num">{{item.amount}}</text>
+          </view>
+          <text class="coupon-store">限【{{item.storeName}}】使用</text>
+        </view>
+        <view class="coupon-right">
+          <text class="coupon-period">第 {{item.period}} 期 · {{item.periodMonth}}</text>
+          <view class="coupon-status-box pending" wx:if="{{item.status === 0}}">
+            <text class="status-text">待激活</text>
+            <text class="status-hint">请登录【河北移动权益优选】小程序领取后激活</text>
+          </view>
+          <view class="coupon-status-box available" wx:if="{{item.status === 1 && !item.isNotCurrentMonth && !item.isMonthlyUsedUp}}">
+            <text class="status-text">可使用</text>
+            <text class="status-hint" wx:if="{{item.monthlyLimit > 1}}">本月剩余 {{item.remainingTimes}}/{{item.monthlyLimit}} 次</text>
+            <text class="status-hint" wx:else>到店出示给店员</text>
+            <van-button type="danger" size="small" round custom-class="use-btn" bind:click="showVerifyCode" data-id="{{item.id}}">立即使用</van-button>
+          </view>
+          <view class="coupon-status-box monthly-used-up" wx:if="{{item.status === 1 && !item.isNotCurrentMonth && item.isMonthlyUsedUp}}">
+            <text class="status-text used">本月已用完</text>
+            <text class="status-hint">已使用 {{item.usedTimes}} 次，下月恢复</text>
+          </view>
+          <view class="coupon-status-box not-current-month" wx:if="{{item.status === 1 && item.isNotCurrentMonth}}">
+            <text class="status-text muted">非当月</text>
+            <text class="status-hint">仅限 {{item.periodMonth}} 使用</text>
+            <van-button type="default" size="small" round custom-class="use-btn muted-btn" bind:click="showVerifyCode" data-id="{{item.id}}">查看详情</van-button>
+          </view>
+          <view class="coupon-status-box used" wx:if="{{item.status === 2}}">
+            <text class="status-text used">本月已用完</text>
+            <text class="status-hint">已使用 {{item.usedTimes || 0}} 次</text>
+          </view>
+          <view class="coupon-status-box expired" wx:if="{{item.status === 3}}">
+            <text class="status-text">已过期</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="sheet tips-sheet">
+      <text class="tips-title">使用说明</text>
+      <view class="tips-list">
+        <view class="tips-item">
+          <text class="tips-num">1</text>
+          <text class="tips-text">领取权益：订购成功后，登录【河北移动权益优选】小程序，使用办理业务手机号领取代金券即可激活</text>
+        </view>
+        <view class="tips-item">
+          <text class="tips-num">2</text>
+          <text class="tips-text">查看权益：代金券激活后，返回本小程序「我的卡包」即可查看</text>
+        </view>
+        <view class="tips-item">
+          <text class="tips-num">3</text>
+          <text class="tips-text">使用权益：到店后点击「立即使用」获取核销码，向店员出示即可</text>
+        </view>
+        <view class="tips-item">
+          <text class="tips-num">4</text>
+          <text class="tips-text">权益规则：代金券自激活当月内有效，每笔订单限用 1 张，每月限激活 1 张</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="tabbar-spacer" />
+
+  <van-popup
+    show="{{ showModal }}"
+    round
+    position="center"
+    closeable
+    close-icon-position="top-right"
+    custom-class="verify-popup"
+    bind:close="hideModal"
+    lock-scroll="{{true}}"
+  >
+    <view class="modal-inner" catchtouchmove="preventBubble" catchtap="preventBubble">
+      <text class="modal-title">出示核销码</text>
+      <text class="verify-tip">请将二维码对准扫码设备，有效期内使用</text>
+      <view class="qrcode-wrapper" catchtouchmove="preventBubble">
+        <canvas
+          canvas-id="qrcode-canvas"
+          class="qrcode-canvas"
+          style="width: 200px; height: 200px;"
+        />
+      </view>
+      <view class="code-row">
+        <text class="code-number">{{verifyCode}}</text>
+        <van-tag type="{{countdown < 60 ? 'warning' : 'primary'}}" plain size="medium">{{countdownText}}</van-tag>
+      </view>
+      <text class="code-hint" wx:if="{{countdown < 60}}">即将过期，可点击下方刷新</text>
+      <van-cell-group inset custom-class="modal-cells">
+        <van-cell title="券面额" value="¥{{currentCoupon.amount}}" />
+        <van-cell title="适用门店" value="{{currentCoupon.storeName}}" />
+      </van-cell-group>
+      <van-button
+        type="{{countdown < 60 ? 'warning' : 'primary'}}"
+        block
+        round
+        plain="{{countdown >= 60}}"
+        loading="{{ regenerating }}"
+        bind:click="regenerateCode"
+      >{{countdown < 60 ? '即将过期，重新生成' : '刷新核销码'}}</van-button>
+    </view>
+  </van-popup>
+
+  <van-toast id="van-toast" />
+  </block>
+</view>

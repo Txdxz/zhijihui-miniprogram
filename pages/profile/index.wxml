@@ -1,0 +1,117 @@
+<view class="page">
+  <!-- Loading skeleton -->
+  <skeleton wx:if="{{pageLoading}}" loading="{{pageLoading}}" type="card" item-count="2" />
+
+  <!-- Error state -->
+  <view wx:elif="{{pageError}}" class="error-state">
+    <text class="error-state__text">{{pageError}}</text>
+    <button class="retry-btn" bindtap="loadProfile" size="mini">重试</button>
+  </view>
+
+  <block wx:else>
+
+  <!-- ===== Profile Card ===== -->
+  <view class="profile-card">
+    <view class="avatar-section">
+      <button
+        class="avatar-btn"
+        open-type="{{editing ? 'chooseAvatar' : ''}}"
+        bindchooseavatar="onChooseAvatar"
+        disabled="{{!editing}}"
+      >
+        <image class="avatar-img" src="{{avatarUrl || '/images/default-avatar.png'}}" mode="aspectFill" />
+      </button>
+      <text class="avatar-hint" wx:if="{{editing}}">点击更换头像</text>
+    </view>
+
+    <view class="nickname-section">
+      <text class="section-label">昵称</text>
+      <input
+        wx:if="{{editing}}"
+        class="nickname-input"
+        type="nickname"
+        value="{{nickName}}"
+        placeholder="请输入昵称"
+        bindchange="onNicknameChange"
+        bindinput="onNicknameInput"
+      />
+      <text wx:else class="nickname-text">{{nickName || '未设置'}}</text>
+    </view>
+
+    <view class="phone-section" wx:if="{{phone}}">
+      <text class="section-label">手机号</text>
+      <text class="phone-text">{{phone}}</text>
+    </view>
+  </view>
+
+  <!-- Profile action bar -->
+  <view class="action-bar">
+    <block wx:if="{{editing}}">
+      <van-button type="primary" block round loading="{{saving}}" bind:click="saveProfile">保存</van-button>
+      <van-button type="default" block round class="cancel-btn" bind:click="cancelEdit">取消</van-button>
+    </block>
+    <van-button wx:else type="primary" block round bind:click="startEdit">编辑资料</van-button>
+  </view>
+
+  <!-- ===== Admin Login Confirm (仅管理员可见) ===== -->
+  <view class="sheet admin-login-sheet" wx:if="{{isAdmin}}" bindtap="goToLoginConfirm">
+    <view class="section-header">
+      <text class="section-title">管理后台登录确认</text>
+      <text class="section-arrow">›</text>
+    </view>
+    <text class="section-desc">确认 PC 管理后台的登录请求</text>
+  </view>
+
+  <!-- ===== Coupon Stats Summary ===== -->
+  <view class="sheet" bindtap="viewCoupons">
+    <view class="section-header">
+      <text class="section-title">我的代金券</text>
+      <text class="section-arrow">›</text>
+    </view>
+    <view class="stats-grid">
+      <view class="stats-col">
+        <text class="stats-num num-total">{{couponStats.total}}</text>
+        <text class="stats-label">共 {{couponStats.total}} 张</text>
+      </view>
+      <view class="stats-col">
+        <text class="stats-num num-pending">{{couponStats.pending}}</text>
+        <text class="stats-label">待激活</text>
+      </view>
+      <view class="stats-col">
+        <text class="stats-num num-active">{{couponStats.active}}</text>
+        <text class="stats-label">可使用</text>
+      </view>
+      <view class="stats-col">
+        <text class="stats-num num-used">{{couponStats.used}}</text>
+        <text class="stats-label">已使用</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ===== Contract History ===== -->
+  <view class="sheet">
+    <view class="section-header">
+      <text class="section-title">办理记录</text>
+    </view>
+    <view wx:if="{{contracts.length === 0}}" class="empty-state">
+      <text class="empty-text">暂无办理记录</text>
+    </view>
+    <view wx:else class="contract-list">
+      <view class="contract-item" wx:for="{{contracts}}" wx:key="_id">
+        <view class="contract-top">
+          <text class="contract-name">{{item.name || '未填写'}}</text>
+          <text class="contract-status tag-{{_getStatusCls(item.status)}}">{{_getStatusLabel(item.status)}}</text>
+        </view>
+        <view class="contract-info">
+          <text class="contract-meta">编号：{{item.contractId || item._id.slice(-8)}}</text>
+          <text class="contract-meta">门店：{{item.storeName || '未知'}}</text>
+        </view>
+        <text class="contract-date">{{_formatDate(item.createdAt)}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="tabbar-spacer" />
+  <van-toast id="van-toast" />
+  </block>
+</view>

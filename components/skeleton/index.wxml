@@ -1,0 +1,40 @@
+<view wx:if="{{loading}}" class="skeleton {{animate ? 'skeleton--animate' : ''}}">
+  <!-- 卡片骨架 -->
+  <block wx:if="{{type === 'card'}}">
+    <view wx:for="{{items}}" wx:key="index" class="skeleton-card">
+      <view class="skeleton-card__header">
+        <view class="skeleton-card__avatar skeleton-item"></view>
+        <view class="skeleton-card__title">
+          <view class="skeleton-item" style="width: 60%;"></view>
+          <view class="skeleton-item" style="width: 40%; margin-top: 12rpx;"></view>
+        </view>
+      </view>
+      <view class="skeleton-card__body">
+        <view class="skeleton-item" style="width: 100%;"></view>
+        <view class="skeleton-item" style="width: 80%; margin-top: 16rpx;"></view>
+      </view>
+    </view>
+  </block>
+  
+  <!-- 列表骨架 -->
+  <block wx:elif="{{type === 'list'}}">
+    <view wx:for="{{items}}" wx:key="index" class="skeleton-list-item">
+      <view class="skeleton-item skeleton-list-item__icon"></view>
+      <view class="skeleton-list-item__content">
+        <view class="skeleton-item" style="width: 70%;"></view>
+        <view class="skeleton-item" style="width: 50%; margin-top: 12rpx;"></view>
+      </view>
+    </view>
+  </block>
+  
+  <!-- 文本骨架 -->
+  <block wx:elif="{{type === 'text'}}">
+    <view class="skeleton-text">
+      <view class="skeleton-item" style="width: 100%;"></view>
+      <view class="skeleton-item" style="width: 90%; margin-top: 16rpx;"></view>
+      <view class="skeleton-item" style="width: 60%; margin-top: 16rpx;"></view>
+    </view>
+  </block>
+</view>
+
+<slot wx:else></slot>

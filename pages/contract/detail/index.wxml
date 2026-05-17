@@ -1,0 +1,68 @@
+<view class="page">
+  <skeleton wx:if="{{pageLoading}}" loading="{{pageLoading}}" type="card" item-count="1" />
+
+  <view wx:elif="{{pageError}}" class="error-state">
+    <view class="error-state__icon">⚠️</view>
+    <text class="error-state__text">{{pageError}}</text>
+    <button class="retry-btn" bindtap="onPullDownRefresh" size="mini">重试</button>
+  </view>
+
+  <block wx:else>
+  <!-- 状态横幅 -->
+  <view class="status-banner" style="background: {{statusInfo.color}}">
+    <text class="status-icon">{{statusInfo.icon}}</text>
+    <text class="status-text">{{statusInfo.text}}</text>
+  </view>
+
+  <!-- 合约信息 -->
+  <view class="sheet">
+    <text class="sheet-title">合约信息</text>
+    <van-cell-group inset>
+      <van-cell title="合约编号" value="{{contract.contractId || contract.id}}" />
+      <van-cell title="手机号" value="{{contract.phone}}" />
+      <van-cell title="办理门店" value="{{contract.storeName}}" />
+      <van-cell title="提交时间" value="{{contract.createdAt}}" />
+    </van-cell-group>
+  </view>
+
+  <!-- 收货信息（如果已填写） -->
+  <view class="sheet" wx:if="{{contract.name || contract.address}}">
+    <text class="sheet-title">收货信息</text>
+    <van-cell-group inset>
+      <van-cell title="收货人" value="{{contract.name}}" />
+      <van-cell title="收货地址" value="{{contract.address}}" />
+    </van-cell-group>
+  </view>
+
+  <!-- 快递信息（如果已发货） -->
+  <view class="sheet" wx:if="{{contract.trackingNo}}">
+    <text class="sheet-title">快递信息</text>
+    <van-cell-group inset>
+      <van-cell title="快递单号" value="{{contract.trackingNo}}" />
+    </van-cell-group>
+    <van-button type="primary" plain block size="small" class="copy-btn" bind:tap="onCopyTrackingNo">复制快递单号</van-button>
+  </view>
+
+  <!-- 状态时间线 -->
+  <view class="sheet">
+    <text class="sheet-title">办理进度</text>
+    <view class="timeline">
+      <view class="timeline-item {{item.active ? 'active' : 'inactive'}}" wx:for="{{timeline}}" wx:key="index">
+        <view class="timeline-dot {{item.active ? 'active' : 'inactive'}}" />
+        <view class="timeline-line {{item.active ? 'active' : 'inactive'}}" wx:if="{{index < timeline.length - 1}}" />
+        <view class="timeline-body">
+          <text class="timeline-title">{{item.text}}</text>
+          <text class="timeline-desc">{{item.desc}}</text>
+          <text class="timeline-time" wx:if="{{item.time}}">{{item.time}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-bar">
+    <van-button type="primary" block round bind:tap="goToCoupon">查看我的卡包</van-button>
+    <van-button type="default" block round class="home-btn" bind:tap="goHome">返回首页</van-button>
+  </view>
+  </block>
+</view>

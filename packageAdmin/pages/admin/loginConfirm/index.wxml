@@ -1,0 +1,27 @@
+<view class="page">
+  <view class="card">
+    <view class="header-icon">
+      <image class="avatar" src="{{userInfo.avatarUrl || '/images/default-avatar.png'}}" />
+    </view>
+    <view class="nickname">{{userInfo.nickName || '微信用户'}}</view>
+
+    <view class="section">
+      <view class="section-title">PC 管理后台登录</view>
+      <button class="confirm-btn" type="primary" loading="{{loading}}" bindtap="onConfirm">
+        {{loading ? '确认中...' : '确认 PC 管理后台登录'}}
+      </button>
+      <view class="error" wx:if="{{error}}">{{error}}</view>
+    </view>
+
+    <view class="divider">
+      <text class="divider-text">或者</text>
+    </view>
+
+    <view class="section">
+      <view class="section-title">小程序管理后台</view>
+      <button class="admin-btn" bindtap="goToAdminPanel">进入小程序管理后台</button>
+    </view>
+
+    <view class="tip">仅管理员可访问以上功能</view>
+  </view>
+</view>

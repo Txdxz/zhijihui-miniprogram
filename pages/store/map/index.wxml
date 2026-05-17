@@ -1,0 +1,28 @@
+<map
+  id="storeMap"
+  class="map-view"
+  latitude="{{latitude}}"
+  longitude="{{longitude}}"
+  scale="{{scale}}"
+  markers="{{markers}}"
+  show-location="{{true}}"
+  bindmarkertap="onMarkerTap"
+  bindtap="onMapTap"
+>
+  <cover-view class="map-empty-tip" wx:if="{{!hasStoresWithLocation && !pageLoading}}">
+    <cover-view class="empty-text">暂无可显示的门店位置</cover-view>
+    <cover-view class="empty-sub">请联系管理员配置门店坐标</cover-view>
+  </cover-view>
+</map>
+
+<view class="store-panel" wx:if="{{selectedStore}}" bindtap="onNavigateToStore">
+  <view class="panel-handle" />
+  <view class="panel-content">
+    <text class="panel-name">{{selectedStore.name}}</text>
+    <text class="panel-addr">{{selectedStore.address}}</text>
+    <view class="panel-distance" wx:if="{{selectedStore.distanceText}}">
+      <text class="panel-distance-text">{{selectedStore.distanceText}}</text>
+    </view>
+    <text class="panel-tip">点击导航到门店 ›</text>
+  </view>
+</view>

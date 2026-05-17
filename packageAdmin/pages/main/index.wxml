@@ -1,0 +1,114 @@
+<!--packageAdmin/pages/main/index.wxml-->
+<view class="admin-main">
+  <!-- 管理员信息 -->
+  <view class="admin-header">
+    <view class="admin-avatar">
+      <van-icon name="user-o" size="48rpx" color="#1677FF" />
+    </view>
+    <view class="admin-info">
+      <view class="admin-name">{{adminInfo.name || '管理员'}}</view>
+      <view class="admin-phone" wx:if="{{adminInfo.phone}}">{{adminInfo.phone}}</view>
+    </view>
+    <view class="admin-logout" bindtap="logoutAdmin">
+      <van-icon name="ellipsis" size="32rpx" color="#999" />
+    </view>
+  </view>
+
+  <!-- 快捷统计 -->
+  <view class="stats-grid">
+    <view class="stat-card" bindtap="goToContract">
+      <view class="stat-icon pending">
+        <van-icon name="clock-o" size="40rpx" color="#FF9800" />
+      </view>
+      <view class="stat-content">
+        <view class="stat-number">{{stats.pendingContracts}}</view>
+        <view class="stat-label">待审批合约</view>
+      </view>
+    </view>
+
+    <view class="stat-card" bindtap="goToContract">
+      <view class="stat-icon today">
+        <van-icon name="calendar-o" size="40rpx" color="#1677FF" />
+      </view>
+      <view class="stat-content">
+        <view class="stat-number">{{stats.todayContracts}}</view>
+        <view class="stat-label">今日新增</view>
+      </view>
+    </view>
+
+    <view class="stat-card" bindtap="goToCoupon" wx:if="{{canManageCouponOps}}">
+      <view class="stat-icon coupon">
+        <van-icon name="coupon-o" size="40rpx" color="#4CAF50" />
+      </view>
+      <view class="stat-content">
+        <view class="stat-number">{{stats.totalCoupons}}</view>
+        <view class="stat-label">代金券总量</view>
+      </view>
+    </view>
+
+    <view class="stat-card" bindtap="goToStore" wx:if="{{canManageStoreSetup}}">
+      <view class="stat-icon store">
+        <van-icon name="shop-o" size="40rpx" color="#9C27B0" />
+      </view>
+      <view class="stat-content">
+        <view class="stat-number">{{stats.totalStores}}</view>
+        <view class="stat-label">合作门店</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 功能菜单 -->
+  <view class="menu-section">
+    <view class="menu-item" bindtap="goToContract">
+      <view class="menu-icon">
+        <van-icon name="description" size="40rpx" color="#1677FF" />
+      </view>
+      <view class="menu-content">
+        <view class="menu-title">合约管理</view>
+        <view class="menu-desc">审批合约、订单发货、对账导出</view>
+      </view>
+      <view class="menu-arrow">
+        <van-icon name="arrow" size="32rpx" color="#999" />
+      </view>
+    </view>
+
+    <view class="menu-item" bindtap="goToCoupon" wx:if="{{canManageCouponOps}}">
+      <view class="menu-icon">
+        <van-icon name="coupon-o" size="40rpx" color="#4CAF50" />
+      </view>
+      <view class="menu-content">
+        <view class="menu-title">代金券管理</view>
+        <view class="menu-desc">统计概览、规则配置、核销记录</view>
+      </view>
+      <view class="menu-arrow">
+        <van-icon name="arrow" size="32rpx" color="#999" />
+      </view>
+    </view>
+
+    <view class="menu-item" bindtap="goToStore" wx:if="{{canManageStoreSetup}}">
+      <view class="menu-icon">
+        <van-icon name="shop-o" size="40rpx" color="#9C27B0" />
+      </view>
+      <view class="menu-content">
+        <view class="menu-title">门店管理</view>
+        <view class="menu-desc">添加门店、编辑信息、区域筛选</view>
+      </view>
+      <view class="menu-arrow">
+        <van-icon name="arrow" size="32rpx" color="#999" />
+      </view>
+    </view>
+
+    <view class="menu-item" bindtap="goToAdmin" wx:if="{{canManageAdmins}}">
+      <view class="menu-icon">
+        <van-icon name="manager" size="40rpx" color="#FF5722" />
+      </view>
+      <view class="menu-content">
+        <view class="menu-title">管理员管理</view>
+        <view class="menu-desc">添加管理员、权限分配</view>
+      </view>
+      <view class="menu-arrow">
+        <van-icon name="arrow" size="32rpx" color="#999" />
+      </view>
+    </view>
+  </view>
+</view>

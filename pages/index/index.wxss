@@ -1,0 +1,956 @@
+/* pages/index/index.wxss - 首页样式 V2.0 (微信设计规范优化版)
+ * 优化：字体层级、按钮热区、点击态、无障碍支持
+ */
+
+/* ========== 页面容器 ========== */
+.container {
+  min-height: 100vh;
+  background: #F5F7FA;
+  padding-bottom: 120rpx;
+}
+
+/* ========== 顶部品牌区域 ========== */
+.header {
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  padding: 60rpx 32rpx 48rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.brand-name {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.3;
+}
+
+.brand-slogan {
+  display: block;
+  font-size: 26rpx;
+  color: rgba(255,255,255,0.8);
+  margin-top: 8rpx;
+}
+
+/* ========== 门店卡片 ========== */
+.store-card {
+  margin: 24rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  position: relative;
+}
+
+.store-badge {
+  display: inline-block;
+  background: #FFF8E6;
+  color: #B78A00;
+  font-size: 24rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  margin-bottom: 12rpx;
+}
+
+.store-name {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 8rpx;
+}
+
+.store-addr {
+  font-size: 28rpx;
+  color: #666666;
+  line-height: 1.5;
+}
+
+/* ========== 卡片通用 ========== */
+.card {
+  margin: 0 24rpx 24rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.card-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 24rpx;
+}
+
+/* ========== 进度条 ========== */
+.progress-card {
+  margin-top: 24rpx;
+}
+
+.card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.card-title-row .card-title {
+  margin-bottom: 0;
+}
+
+/* 新办业务按钮 - 绿色主题 */
+.new-contract-btn {
+  padding: 8rpx 20rpx;
+  background: #F0FFF4;
+  border-radius: 24rpx;
+  border: 1rpx solid #B7EB8F;
+}
+
+.new-contract-text {
+  font-size: 24rpx;
+  color: #52C41A;
+  font-weight: 500;
+}
+
+/* ========== 步骤卡片（微信规范：清晰明确） ========== */
+.step-card {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.step-num-badge {
+  background: #E6F0FF;
+  color: #1677FF;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border-radius: 8rpx;
+  margin-right: 16rpx;
+}
+
+.step-header.success .step-num-badge {
+  background: #E8F8EF;
+  color: #07C160;
+}
+
+.step-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+}
+
+/* ========== 输入框（微信规范：友好的输入体验） ========== */
+.input-group {
+  margin-bottom: 24rpx;
+}
+
+.input-label {
+  display: block;
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
+.input-field {
+  border: 2rpx solid #E5E5E5;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  font-size: 34rpx;
+  background: #F8F8F8;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-height: 96rpx;
+  box-sizing: border-box;
+}
+
+/* 微信规范：聚焦时的边框高亮 */
+.input-field:focus {
+  background: #FFFFFF;
+  border-color: #1677FF;
+  box-shadow: 0 0 0 4rpx rgba(22, 119, 255, 0.1);
+}
+
+/* 微信规范：错误状态提示 */
+.input-field.error {
+  border-color: #FA5151;
+  background: #FFEDED;
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8rpx); }
+  75% { transform: translateX(8rpx); }
+}
+
+/* 微信规范：验证码输入框 */
+.sms-input {
+  letter-spacing: 8rpx;
+  text-align: center;
+  font-size: 40rpx;
+  font-weight: 600;
+}
+
+.picker-field {
+  border: 2rpx solid #E5E5E5;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  background: #F8F8F8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 96rpx;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.picker-field:active {
+  border-color: #1677FF;
+}
+
+.picker-arrow {
+  font-size: 40rpx;
+  color: #999999;
+  transition: transform 0.2s ease;
+}
+
+/* ========== 复选框 ========== */
+.checkbox-group {
+  margin: 24rpx 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+}
+
+.checkbox-text {
+  font-size: 28rpx;
+  color: #666666;
+  margin-left: 12rpx;
+  line-height: 1.6;
+}
+
+/* ========== 提示框（微信规范：清晰明确） ========== */
+.notice-box {
+  background: #FFF8E6;
+  border: 1rpx solid #FFE58F;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  display: flex;
+  align-items: flex-start;
+}
+
+.notice-icon {
+  margin-right: 12rpx;
+  font-size: 32rpx;
+  flex-shrink: 0;
+}
+
+.notice-text {
+  font-size: 28rpx;
+  color: #8A6400;
+  line-height: 1.6;
+}
+
+/* ========== 等待动画（微信规范：避免长时间白屏） ========== */
+.center {
+  text-align: center;
+}
+
+.waiting-anim {
+  display: flex;
+  justify-content: center;
+  gap: 12rpx;
+  margin-bottom: 32rpx;
+}
+
+.loading-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #1677FF;
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(2) { animation-delay: 0.15s; }
+.loading-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes dotPulse {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.loading-anim {
+  display: flex;
+  justify-content: center;
+  gap: 16rpx;
+  margin-bottom: 32rpx;
+}
+
+.circle {
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  border: 4rpx solid #1677FF;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+.circle:nth-child(2) { animation-delay: 0.1s; }
+.circle:nth-child(3) { animation-delay: 0.2s; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.waiting-text {
+  font-size: 34rpx;
+  color: #333333;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.waiting-hint {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* ========== 短信通知 ========== */
+.sms-notice {
+  background: #E8F8EF;
+  border: 1rpx solid #B7EB8F;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  text-align: center;
+}
+
+.sms-notice-text {
+  font-size: 30rpx;
+  color: #07C160;
+  line-height: 1.6;
+}
+
+.sms-phone {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin: 0 8rpx;
+}
+
+.sms-tip {
+  display: flex;
+  align-items: flex-start;
+  margin: 16rpx 0 24rpx;
+}
+
+.tip-icon {
+  margin-right: 8rpx;
+  font-size: 28rpx;
+}
+
+.tip-text {
+  font-size: 26rpx;
+  color: #999999;
+  line-height: 1.6;
+}
+
+/* 验证码过期提示 */
+.sms-expire-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+  background: #FFF8E6;
+  border-radius: 12rpx;
+  border: 1rpx dashed #FFCC00;
+}
+
+.sms-expire-tip:active {
+  background: #FFF1CC;
+}
+
+.sms-expire-text {
+  font-size: 26rpx;
+  color: #8A6400;
+}
+
+.sms-expire-action {
+  font-size: 26rpx;
+  color: #1677FF;
+  font-weight: 500;
+  text-decoration: underline;
+}
+
+/* ========== 权益礼包 ========== */
+.gift-card {
+  background: linear-gradient(135deg, #FFF8E6 0%, #FFF1E6 100%);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.gift-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 20rpx;
+}
+
+.gift-items {
+  display: flex;
+  gap: 16rpx;
+}
+
+.gift-item {
+  flex: 1;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 24rpx 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gift-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+
+.gift-name {
+  font-size: 26rpx;
+  color: #333333;
+  margin-bottom: 8rpx;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.gift-tag {
+  background: #FA5151;
+  color: #FFFFFF;
+  font-size: 22rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+}
+
+/* ========== 快递卡片 ========== */
+.delivery-status-box {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: #FFF8E6;
+  border: 1rpx solid #FFE58F;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.delivery-status-icon { font-size: 36rpx; }
+
+.delivery-status-text {
+  font-size: 28rpx;
+  color: #8A6400;
+  flex: 1;
+}
+
+.delivery-card {
+  background: #F5F7FA;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.delivery-header {
+  margin-bottom: 16rpx;
+}
+
+.delivery-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+}
+
+.delivery-info {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.delivery-company {
+  background: #1677FF;
+  color: #FFFFFF;
+  font-size: 24rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  font-weight: 500;
+}
+
+.delivery-no {
+  font-size: 30rpx;
+  color: #333333;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
+}
+
+/* ========== 物流时间线 ========== */
+.logistics-timeline {
+  border-left: 4rpx solid #E5E5E5;
+  padding-left: 24rpx;
+  margin-left: 8rpx;
+}
+
+.logistics-item {
+  position: relative;
+  padding-bottom: 24rpx;
+}
+
+.logistics-item:last-child {
+  padding-bottom: 0;
+}
+
+.logistics-dot {
+  position: absolute;
+  left: -28rpx;
+  top: 6rpx;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #E5E5E5;
+}
+
+.logistics-item.latest .logistics-dot {
+  background: #07C160;
+  width: 16rpx;
+  height: 16rpx;
+  left: -30rpx;
+  top: 4rpx;
+}
+
+.logistics-status {
+  display: block;
+  font-size: 28rpx;
+  color: #333333;
+  margin-bottom: 4rpx;
+}
+
+.logistics-item.latest .logistics-status {
+  color: #07C160;
+  font-weight: 600;
+}
+
+.logistics-time {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+/* ========== 按钮组（微信规范：按钮热区 ≥ 7mm） ========== */
+.btn-group {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.btn-group .btn-primary,
+.btn-group .btn-secondary {
+  flex: 1;
+}
+
+/* 底部提示 */
+.footer-tip {
+  text-align: center;
+  padding: 32rpx;
+  font-size: 26rpx;
+  color: #999999;
+}
+
+/* ========== 主色按钮（微信规范：友好的点击反馈） ========== */
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  color: #FFFFFF;
+  border-radius: 100rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  min-height: 96rpx;
+  padding: 24rpx 48rpx;
+  line-height: 1.4;
+  text-align: center;
+  border: none;
+  margin-top: 24rpx;
+  display: block;
+  box-sizing: border-box;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+/* 微信规范：按钮点击态 */
+.btn-primary:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+.btn-primary[disabled] {
+  background: #CCCCCC;
+  color: #FFFFFF;
+}
+
+.btn-secondary {
+  width: 100%;
+  background: #FFFFFF;
+  color: #1677FF;
+  border: 2rpx solid #1677FF;
+  border-radius: 100rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  min-height: 96rpx;
+  padding: 22rpx 48rpx;
+  line-height: 1.4;
+  text-align: center;
+  display: block;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:active {
+  background: rgba(22, 119, 255, 0.08);
+  transform: scale(0.96);
+}
+
+/* ========== 用户信息栏 V2.1 ========== */
+.user-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.user-avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  border: 4rpx solid rgba(255, 255, 255, 0.4);
+}
+
+.user-nickname {
+  font-size: 30rpx;
+  color: #FFFFFF;
+  font-weight: 500;
+  max-width: 200rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-arrow {
+  font-size: 32rpx;
+  color: rgba(255,255,255,0.7);
+  margin-left: 4rpx;
+}
+
+.detail-link-btn {
+  margin-top: 24rpx !important;
+}
+
+.login-btn {
+  padding: 12rpx 32rpx;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2rpx solid rgba(255, 255, 255, 0.4);
+  border-radius: 100rpx;
+}
+
+.login-btn-text {
+  font-size: 28rpx;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+.location-badge {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 10rpx 20rpx;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 100rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.3);
+}
+
+.location-icon {
+  font-size: 24rpx;
+}
+
+.location-text {
+  font-size: 24rpx;
+  color: #FFFFFF;
+  max-width: 140rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ========== 门店卡片扩展 V2.1 ========== */
+.store-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.store-card-header .store-badge {
+  margin-bottom: 0;
+}
+
+.store-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.location-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 8rpx 16rpx;
+  background: #E6F0FF;
+  border-radius: 20rpx;
+  border: 1rpx solid #B3D4FF;
+}
+
+.location-refresh-btn:active {
+  background: #CCE0FF;
+}
+
+.location-refresh-icon {
+  font-size: 22rpx;
+}
+
+.location-refresh-text {
+  font-size: 22rpx;
+  color: #1677FF;
+  font-weight: 500;
+}
+
+.store-distance {
+  background: #E8F8EF;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+}
+
+.distance-text {
+  font-size: 24rpx;
+  color: #07C160;
+  font-weight: 500;
+}
+
+.switch-store-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  margin-top: 20rpx;
+  padding: 16rpx;
+  background: #F5F7FA;
+  border-radius: 12rpx;
+  border: 1rpx dashed #DCDFE6;
+}
+
+.switch-store-btn:active {
+  background: #E6E8EB;
+}
+
+.switch-store-text {
+  font-size: 28rpx;
+  color: #1677FF;
+  font-weight: 500;
+}
+
+.switch-store-arrow {
+  font-size: 32rpx;
+  color: #1677FF;
+}
+
+.store-map-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18rpx;
+  padding: 12rpx 24rpx;
+  background: #E6F0FF;
+  border-radius: 12rpx;
+}
+
+.store-map-link:active {
+  opacity: 0.7;
+}
+
+.store-map-text {
+  font-size: 26rpx;
+  color: #1677FF;
+  font-weight: 500;
+}
+
+.store-map-arrow {
+  font-size: 28rpx;
+  color: #1677FF;
+  margin-left: 4rpx;
+}
+
+/* ========== 登录弹窗 ========== */
+.login-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-modal {
+  width: 600rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx;
+  text-align: center;
+}
+
+.login-modal-icon {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  margin: 0 auto 32rpx;
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60rpx;
+}
+
+.login-modal-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 16rpx;
+}
+
+.login-modal-desc {
+  font-size: 28rpx;
+  color: #666666;
+  line-height: 1.6;
+  margin-bottom: 40rpx;
+}
+
+.login-modal-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #1677FF 0%, #0051D4 100%);
+  color: #FFFFFF;
+  border-radius: 100rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  min-height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20rpx;
+  border: none;
+}
+
+.login-modal-btn:active {
+  opacity: 0.9;
+  transform: scale(0.98);
+}
+
+.login-modal-skip {
+  font-size: 28rpx;
+  color: #999999;
+  padding: 16rpx;
+}
+
+/* ========== 错误状态 ========== */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 80rpx 40rpx;
+  text-align: center;
+}
+
+.error-state__icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.6;
+}
+
+.error-state__text {
+  font-size: 28rpx;
+  color: #999999;
+  margin-bottom: 32rpx;
+  line-height: 1.5;
+}
+
+.error-state__actions {
+  display: flex;
+  gap: 24rpx;
+}
+
+.retry-btn {
+  background: #1677FF;
+  color: #FFFFFF;
+  border-radius: 100rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  padding: 16rpx 48rpx;
+}
+
+/* ========== 空状态 ========== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  padding: 60rpx 40rpx;
+  text-align: center;
+}
+
+.empty-state__icon {
+  font-size: 64rpx;
+  margin-bottom: 16rpx;
+  opacity: 0.4;
+}
+
+.empty-state__text {
+  font-size: 28rpx;
+  color: #BBBBBB;
+  line-height: 1.5;
+}

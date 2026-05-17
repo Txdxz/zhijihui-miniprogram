@@ -1,0 +1,19 @@
+{
+  "navigationBarTitleText": "管理后台",
+  "navigationBarBackgroundColor": "#1A1A1A",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#1A1A1A",
+  "usingComponents": {
+    "van-tabs": "@vant/weapp/tabs/index",
+    "van-tab": "@vant/weapp/tab/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-tag": "@vant/weapp/tag/index",
+    "van-field": "@vant/weapp/field/index",
+    "van-empty": "@vant/weapp/empty/index",
+    "van-search": "@vant/weapp/search/index",
+    "van-popup": "@vant/weapp/popup/index",
+    "van-toast": "@vant/weapp/toast/index",
+    "van-dialog": "@vant/weapp/dialog/index",
+    "skeleton": "/components/skeleton/index"
+  }
+}

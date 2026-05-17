@@ -1,0 +1,166 @@
+/* pages/contract/detail/index.wxss */
+
+.page {
+  min-height: 100vh;
+  background: #F5F7FA;
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
+}
+
+/* 状态横幅 */
+.status-banner {
+  padding: 40rpx 32rpx;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.status-icon {
+  font-size: 56rpx;
+}
+
+.status-text {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* 卡片 */
+.sheet {
+  margin: 24rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx 8rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.06);
+}
+
+.sheet-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 12rpx;
+  padding: 0 24rpx;
+}
+
+.copy-btn {
+  margin: 16rpx 16rpx 0 !important;
+}
+
+/* 时间线 */
+.timeline {
+  padding: 0 24rpx;
+}
+
+.timeline-item {
+  position: relative;
+  display: flex;
+  padding-left: 40rpx;
+  min-height: 80rpx;
+}
+
+.timeline-item:last-child {
+  min-height: auto;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 6rpx;
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  background: #ddd;
+  z-index: 1;
+}
+
+.timeline-dot.active {
+  background: #1677FF;
+  box-shadow: 0 0 0 6rpx rgba(22, 119, 255, 0.15);
+}
+
+.timeline-dot.inactive {
+  background: #FF4D4F;
+}
+
+.timeline-line {
+  position: absolute;
+  left: 9rpx;
+  top: 30rpx;
+  bottom: 0;
+  width: 2rpx;
+  background: #E5E5E5;
+}
+
+.timeline-line.active {
+  background: #1677FF;
+}
+
+.timeline-body {
+  flex: 1;
+  padding-bottom: 28rpx;
+}
+
+.timeline-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1A1A1A;
+  margin-bottom: 4rpx;
+}
+
+.timeline-desc {
+  display: block;
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.45;
+}
+
+.timeline-time {
+  display: block;
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 4rpx;
+}
+
+/* 操作区 */
+.action-bar {
+  margin: 32rpx 24rpx;
+}
+
+.home-btn {
+  margin-top: 16rpx !important;
+}
+
+/* 错误状态 */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 80rpx 40rpx;
+  text-align: center;
+}
+
+.error-state__icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.6;
+}
+
+.error-state__text {
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 32rpx;
+}
+
+.retry-btn {
+  background: #1677FF;
+  color: #fff;
+  border-radius: 100rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  padding: 16rpx 48rpx;
+}

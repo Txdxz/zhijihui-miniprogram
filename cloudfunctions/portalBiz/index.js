@@ -1,0 +1,1702 @@
+const cloud = require('wx-server-sdk');
+const { checkRateLimit } = require('./rateLimit');
+
+cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+
+const db = cloud.database();
+const _ = db.command;
+
+const MAX_PAGE_SIZE = 100; // 微信云开发单次查询上限
+
+// 企业微信群机器人 Webhook
+const WECOM_WEBHOOK = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=765dda76-444d-4b98-8d7e-c4d63ca91b58';
+
+/**
+ * 给管理员发送企业微信即时通知
+ */
+function sendWecomNotify(title, fields, link) {
+  const https = require('https');
+  const url = new URL(WECOM_WEBHOOK);
+  const lines = [`## ${title}`];
+  fields.forEach(([k, v]) => { lines.push(`> ${k}：<font color="info">${v}</font>`); });
+  if (link) lines.push(`[查看详情](${link})`);
+  const body = JSON.stringify({ msgtype: 'markdown', markdown: { content: lines.join('\n') } });
+  const req = https.request({
+    hostname: url.hostname,
+    path: url.pathname + url.search,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+  }, (res) => { res.on('data', () => {}); });
+  req.on('error', (e) => { console.error('wecom notify error:', e.message); });
+  req.write(body);
+  req.end();
+}
+
+const STATES = {
+  REJECTED: 0,
+  WAIT_VERIFY: 1,
+  QUALIFIED: 2,
+  WAIT_SMSCODE: 3,
+  CONTRACTING: 4,
+  CONTRACT_OK: 5,
+  SHIPPED: 6,
+  SIGNED: 7,
+  SMS_CODE_REJECTED: 8  // 验证码被驳回，需要用户重新输入
+};
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function genId(prefix) {
+  return `${prefix}${Date.now()}${Math.floor(Math.random() * 1000)}`;
+}
+
+function normalizeContract(contract = {}) {
+  return {
+    ...contract,
+    id: contract.id || contract.contractId || ''
+  };
+}
+
+function normalizeCoupon(coupon = {}) {
+  return {
+    ...coupon,
+    id: coupon.id || coupon.couponId || ''
+  };
+}
+
+function maskPhone(phone) {
+  const text = String(phone || '');
+  if (text.length < 7) return text || '未知';
+  return `${text.slice(0, 3)}****${text.slice(-4)}`;
+}
+
+function formatDate(dateLike) {
+  const d = new Date(dateLike);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * 统一参数验证工具
+ * @param {object} params - 待验证的参数对象
+ * @param {object} rules - 验证规则 { field: { required, type, min, max, pattern, message } }
+ * @returns {object} { valid: boolean, errors: string[] }
+ */
+function validateParams(params = {}, rules = {}) {
+  const errors = [];
+  for (const [field, rule] of Object.entries(rules)) {
+    const value = params[field];
+    
+    // 必填检查
+    if (rule.required && (value === undefined || value === null || value === '')) {
+      errors.push(rule.message || `缺少必填字段: ${field}`);
+      continue;
+    }
+    
+    // 非必填且为空则跳过后续验证
+    if (value === undefined || value === null || value === '') continue;
+    
+    // 类型检查
+    if (rule.type) {
+      const actualType = typeof value;
+      if (rule.type === 'array' && !Array.isArray(value)) {
+        errors.push(rule.message || `字段 ${field} 类型错误，应为数组`);
+      } else if (rule.type !== 'array' && actualType !== rule.type) {
+        errors.push(rule.message || `字段 ${field} 类型错误，应为 ${rule.type}`);
+      }
+    }
+    
+    // 数值范围检查
+    if (rule.type === 'number' || typeof value === 'number') {
+      if (rule.min !== undefined && value < rule.min) {
+        errors.push(rule.message || `字段 ${field} 不能小于 ${rule.min}`);
+      }
+      if (rule.max !== undefined && value > rule.max) {
+        errors.push(rule.message || `字段 ${field} 不能大于 ${rule.max}`);
+      }
+    }
+    
+    // 字符串长度检查
+    if (typeof value === 'string') {
+      if (rule.minLength !== undefined && value.length < rule.minLength) {
+        errors.push(rule.message || `字段 ${field} 长度不能少于 ${rule.minLength} 个字符`);
+      }
+      if (rule.maxLength !== undefined && value.length > rule.maxLength) {
+        errors.push(rule.message || `字段 ${field} 长度不能超过 ${rule.maxLength} 个字符`);
+      }
+    }
+    
+    // 正则匹配检查
+    if (rule.pattern && typeof value === 'string') {
+      if (!rule.pattern.test(value)) {
+        errors.push(rule.message || `字段 ${field} 格式不正确`);
+      }
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+/**
+ * 日志记录工具
+ * @param {string} level - 日志级别: info, warn, error
+ * @param {string} action - 操作类型
+ * @param {object} data - 日志数据
+ */
+function logger(level, action, data = {}) {
+  const logData = {
+    timestamp: nowISO(),
+    level,
+    action,
+    data: {
+      ...data,
+      // 脱敏处理敏感信息
+      phone: data.phone ? sanitizeForLog(data.phone, 'phone') : undefined,
+      contractId: data.contractId ? sanitizeForLog(data.contractId) : undefined,
+      couponId: data.couponId ? sanitizeForLog(data.couponId) : undefined
+    }
+  };
+  
+  switch (level) {
+    case 'error':
+      console.error('ERROR:', logData);
+      break;
+    case 'warn':
+      console.warn('WARN:', logData);
+      break;
+    default:
+      console.log('INFO:', logData);
+  }
+}
+
+/**
+ * 脱敏处理敏感信息（用于日志）
+ * @param {string} text - 原始文本
+ * @param {string} type - 脱敏类型: phone, idcard, name, address
+ * @returns {string} 脱敏后的文本
+ */
+function sanitizeForLog(text, type = 'default') {
+  const str = String(text || '');
+  if (str.length < 4) return '***';
+  
+  switch (type) {
+    case 'phone':
+      return str.length >= 7 ? `${str.slice(0, 3)}****${str.slice(-4)}` : '***';
+    case 'idcard':
+      return str.length >= 10 ? `${str.slice(0, 4)}**********${str.slice(-4)}` : '***';
+    case 'name':
+      return str.length <= 2 ? '*' : `${str[0]}${'*'.repeat(str.length - 1)}`;
+    case 'address':
+      return str.length > 10 ? `${str.slice(0, 6)}...${str.slice(-4)}` : '***';
+    default:
+      return str.length > 8 ? `${str.slice(0, 3)}***${str.slice(-3)}` : '***';
+  }
+}
+
+/**
+ * 发送订阅消息通知管理员
+ * @param {string} action - 通知类型：notifyVerifyPending / notifySmsCodePending / notifyNewSmsCode
+ * @param {object} data - 通知数据
+ */
+async function notifyAdmins(action, data) {
+  try {
+    if (action === 'notifyVerifyPending') {
+      sendWecomNotify('📱 新客户提交申请', [
+        ['手机号', data.phone || ''],
+        ['门店', data.storeName || '']
+      ]);
+    } else if (action === 'notifySmsCodePending') {
+      sendWecomNotify('🔐 客户已提交验证码', [
+        ['手机号', data.phone || ''],
+        ['门店', data.storeName || '']
+      ]);
+    } else if (action === 'notifyNewSmsCode') {
+      sendWecomNotify('🔐 客户重新提交验证码', [
+        ['手机号', data.phone || ''],
+        ['门店', data.storeName || '']
+      ]);
+    }
+  } catch (error) {
+    console.error('发送企业微信通知失败:', error);
+  }
+}
+
+function formatTime(dateLike) {
+  const d = new Date(dateLike);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function ensureRole(openId, roleKeys = []) {
+  const res = await db.collection('portal_roles').where({
+    openId,
+    roleKey: _.in(roleKeys),
+    status: 1
+  }).limit(1).get();
+  return !!(res.data && res.data.length);
+}
+
+async function ensureSuperAdmin(openId) {
+  const res = await db.collection('portal_roles').where({
+    openId,
+    roleKey: 'super_admin',
+    status: 1
+  }).limit(1).get();
+  return !!(res.data && res.data.length);
+}
+
+async function ensureStoreRole(openId, storeId) {
+  const res = await db.collection('portal_roles').where({
+    openId,
+    roleKey: _.in(['store_owner', 'store_clerk']),
+    scopeType: 'store',
+    scopeId: storeId,
+    status: 1
+  }).limit(1).get();
+  return !!(res.data && res.data.length);
+}
+
+async function getStoreById(storeId) {
+  const res = await db.collection('stores').where({
+    storeId,
+    status: _.neq(0)
+  }).limit(1).get();
+  return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function setCurrentContractId(openId, contractId) {
+  const users = db.collection('portal_users');
+  const now = nowISO();
+  const existing = await users.where({ openId }).limit(1).get();
+  if (existing.data && existing.data.length) {
+    await users.doc(existing.data[0]._id).update({
+      data: {
+        currentContractId: contractId || '',
+        updatedAt: now
+      }
+    });
+    return;
+  }
+  await users.add({
+    data: {
+      openId,
+      status: 1,
+      currentContractId: contractId || '',
+      createdAt: now,
+      updatedAt: now
+    }
+  });
+}
+
+/**
+ * 更新用户的手机号
+ * 在用户办理业务时自动同步手机号到用户表
+ */
+async function updateUserPhone(openId, phone) {
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+    return;
+  }
+
+  const users = db.collection('portal_users');
+  const now = nowISO();
+  const existing = await users.where({ openId }).limit(1).get();
+
+  if (existing.data && existing.data.length) {
+    // 更新现有用户记录的手机号
+    await users.doc(existing.data[0]._id).update({
+      data: {
+        phone,
+        updatedAt: now
+      }
+    });
+  } else {
+    // 创建新用户记录（兜底，理论上不应该走到这里）
+    await users.add({
+      data: {
+        openId,
+        phone,
+        nickName: '',
+        avatarUrl: '',
+        status: 1,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+  }
+}
+
+async function getCurrentContractId(openId) {
+  const users = db.collection('portal_users');
+  const existing = await users.where({ openId }).limit(1).get();
+  const currentContractId = existing.data && existing.data[0]
+    ? String(existing.data[0].currentContractId || '')
+    : '';
+  if (currentContractId) {
+    return currentContractId;
+  }
+
+  const contractRes = await db.collection('contracts').where({
+    openId,
+    status: _.gte(STATES.WAIT_VERIFY)
+  }).orderBy('createdAt', 'desc').limit(1).get();
+  const contract = contractRes.data && contractRes.data[0];
+  return contract ? String(contract.contractId || contract.id || '') : '';
+}
+
+async function ensureCouponsForContract(contract = {}) {
+  const contractId = contract.contractId || contract.id;
+  if (!contractId) return;
+
+  const coupons = db.collection('coupons');
+  const exists = await coupons.where({ contractId }).count();
+  if (exists.total > 0) {
+    return;
+  }
+
+  const storeId = contract.storeId || '';
+
+  // 查询匹配的代金券规则
+  let rule = null;
+  try {
+    const rulesRes = await db.collection('coupon_rules').where({
+      status: 1
+    }).get();
+
+    const rules = rulesRes.data || [];
+    // 查找匹配该门店的规则
+    for (const r of rules) {
+      if (r.storeScope === 'all') {
+        rule = r;
+        break;
+      }
+      if (r.storeScope === 'bound' && r.selectedStores && r.selectedStores.includes(storeId)) {
+        rule = r;
+        break;
+      }
+    }
+  } catch (e) {
+    console.error('查询代金券规则失败:', e);
+  }
+
+  // 如果没有匹配的规则，使用默认值
+  const amount = rule ? (rule.amount || 20) : 20;
+  const totalCount = rule ? (rule.totalCount || 5) : 5;
+  const validMonths = rule ? (rule.validMonths || 5) : 5;  // 代金券有效月数
+  const monthlyLimit = rule ? (rule.monthlyLimit || 1) : 1;
+  const ruleId = rule ? (rule.id || rule._id || '') : '';
+
+  const activateDate = nowISO();
+  const tasks = [];
+
+  // 创建 validMonths 张代金券，每张对应一个月
+  for (let i = 0; i < validMonths; i += 1) {
+    // 计算该券对应的月份
+    const periodMonth = new Date(activateDate);
+    periodMonth.setMonth(periodMonth.getMonth() + i);
+    const periodMonthStr = `${periodMonth.getFullYear()}-${String(periodMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    tasks.push(coupons.add({
+      data: {
+        couponId: genId('CP'),
+        contractId,
+        openId: contract.openId,
+        storeId: contract.storeId,
+        storeName: contract.storeName || '',
+        amount,
+        monthlyLimit,
+        ruleId,
+        period: i + 1, // 第几期（从 1 开始）
+        periodMonth: periodMonthStr, // 对应的月份，格式 "2026-04"
+        status: 0,  // 待激活，由移动回调激活
+        activateDate,
+        usedCount: 0,
+        usedTimes: 0, // 本月已使用次数
+        verifyCode: '',
+        verifyExpireAt: 0,
+        usedAt: '',
+        createdAt: activateDate,
+        updatedAt: activateDate
+      }
+    }));
+  }
+
+  await Promise.all(tasks);
+}
+
+async function handleUpdateUserProfile(openId, event = {}) {
+  const nickName = String(event.nickName || '').trim();
+  const avatarUrl = String(event.avatarUrl || '').trim();
+
+  if (!nickName && !avatarUrl) {
+    return { code: 400, message: '没有需要更新的信息' };
+  }
+
+  const now = nowISO();
+  const users = db.collection('portal_users');
+  const existing = await users.where({ openId }).limit(1).get();
+
+  if (existing.data && existing.data.length) {
+    const updateData = { updatedAt: now };
+    if (nickName) updateData.nickName = nickName;
+    if (avatarUrl) updateData.avatarUrl = avatarUrl;
+    await users.doc(existing.data[0]._id).update({ data: updateData });
+  } else {
+    await users.add({
+      data: { openId, nickName, avatarUrl, status: 1, createdAt: now, updatedAt: now }
+    });
+  }
+
+  return { code: 200, data: { nickName, avatarUrl } };
+}
+
+async function handleGetStores(event = {}) {
+  const page = Math.max(1, Number(event.page) || 1);
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(event.pageSize) || 50));
+
+  const [res, countRes] = await Promise.all([
+    db.collection('stores').where({
+      status: _.neq(0)
+    }).skip((page - 1) * pageSize).limit(pageSize).get(),
+    db.collection('stores').where({ status: _.neq(0) }).count()
+  ]);
+
+  return {
+    code: 200,
+    data: {
+      list: (res.data || []).map((item) => ({
+        id: item.storeId || item.id || '',
+        storeId: item.storeId || item.id || '',
+        name: item.name || '',
+        province: item.province || '',
+        city: item.city || '',
+        district: item.district || '',
+        address: item.address || '',
+        phone: item.phone || '',
+        owner: item.owner || '',
+        location: item.location || null
+      })),
+      total: countRes.total,
+      page,
+      pageSize
+    }
+  };
+}
+
+async function handleGetCurrentContractId(openId) {
+  const contractId = await getCurrentContractId(openId);
+  return { code: 200, data: { contractId } };
+}
+
+async function handleCreateNewContract(openId) {
+  // 获取当前合约
+  const currentContractId = await getCurrentContractId(openId);
+  
+  if (currentContractId) {
+    // 检查当前合约状态
+    const res = await db.collection('contracts').where({
+      contractId: currentContractId,
+      openId
+    }).limit(1).get();
+    
+    const contract = res.data && res.data[0];
+    if (contract) {
+      // 已完成状态：CONTRACT_OK(5), SHIPPED(6), SIGNED(7)
+      const completedStates = [STATES.CONTRACT_OK, STATES.SHIPPED, STATES.SIGNED];
+      if (!completedStates.includes(contract.status)) {
+        // 合约还在进行中，不允许新办业务
+        return { 
+          code: 400, 
+          message: '当前还有未完成的业务，请先完成当前业务' 
+        };
+      }
+    }
+  }
+  
+  // 清除当前合约指针，允许创建新合约
+  await setCurrentContractId(openId, '');
+  
+  return { 
+    code: 200, 
+    data: { 
+      canCreate: true,
+      message: '可以创建新业务'
+    } 
+  };
+}
+
+async function handleGetContractStatus(openId, event = {}) {
+  const contractId = String(event.contractId || '').trim();
+  if (!contractId) {
+    return { code: 400, message: '缺少合约标识' };
+  }
+
+  const res = await db.collection('contracts').where({
+    contractId,
+    openId
+  }).limit(1).get();
+  const contract = res.data && res.data[0];
+  if (!contract) {
+    return { code: 404, message: '合约记录不存在' };
+  }
+
+  return { code: 200, data: normalizeContract(contract) };
+}
+
+async function handleSubmitPhone(openId, event = {}) {
+  const validation = validateParams(event, {
+    phone: {
+      required: true,
+      pattern: /^1[3-9]\d{9}$/,
+      message: '手机号格式不正确'
+    },
+    storeId: {
+      required: true,
+      message: '缺少门店信息'
+    }
+  });
+  
+  if (!validation.valid) {
+    return { code: 400, message: validation.errors[0] };
+  }
+  
+  const phone = String(event.phone || '').trim();
+  const storeId = String(event.storeId || '').trim();
+  
+  const store = await getStoreById(storeId);
+  if (!store) {
+    return { code: 404, message: '门店不存在或已停用' };
+  }
+
+  const contractId = genId('C');
+  const now = nowISO();
+  const contract = {
+    contractId,
+    id: contractId,
+    openId,
+    phone,
+    storeId,
+    storeName: store.name || '',
+    status: STATES.WAIT_VERIFY,
+    createdAt: now,
+    updatedAt: now,
+    name: '',
+    address: '',
+    smsCode: '',
+    trackingNo: '',
+    logistics: []
+  };
+  
+  // 记录日志
+  logger('info', 'submit_phone', {
+    openId,
+    phone,
+    storeId,
+    storeName: store.name || '',
+    contractId
+  });
+  
+  await db.collection('contracts').add({ data: contract });
+  await setCurrentContractId(openId, contractId);
+
+  // 同步手机号到用户表
+  await updateUserPhone(openId, phone);
+
+  // 通知管理员：有新客户提交申请
+  await notifyAdmins('notifyVerifyPending', {
+    phone,
+    storeName: store.name || ''
+  });
+
+  return { code: 200, data: { contractId, status: STATES.WAIT_VERIFY } };
+}
+
+async function handleSubmitOrderInfo(openId, event = {}) {
+  const contractId = String(event.contractId || '').trim();
+  const info = event.info || {};
+  if (!contractId) return { code: 400, message: '缺少合约标识' };
+
+  const res = await db.collection('contracts').where({ contractId, openId }).limit(1).get();
+  const contract = res.data && res.data[0];
+  if (!contract) return { code: 404, message: '合约记录不存在' };
+
+  if (contract.status !== STATES.QUALIFIED) {
+    return { code: 400, message: '当前状态不支持提交收货信息' };
+  }
+
+  const name = String(info.name || '').trim();
+  const address = String(info.address || '').trim();
+  const storeId = String(info.storeId || '').trim() || contract.storeId;
+  if (!name || !address || !storeId) {
+    return { code: 400, message: '收货信息不完整' };
+  }
+
+  const now = nowISO();
+  await db.collection('contracts').doc(contract._id).update({
+    data: {
+      name,
+      address,
+      storeId,
+      storeName: String(info.storeName || contract.storeName || ''),
+      status: STATES.WAIT_SMSCODE,
+      updatedAt: now
+    }
+  });
+
+  sendWecomNotify('📋 客户已填写收货信息', [
+    ['姓名', name],
+    ['门店', String(info.storeName || contract.storeName || '')]
+  ]);
+
+  return { code: 200, data: { status: STATES.WAIT_SMSCODE } };
+}
+
+async function handleSubmitSmsCode(openId, event = {}) {
+  const contractId = String(event.contractId || '').trim();
+  const code = String(event.code || '').trim();
+  if (!contractId) return { code: 400, message: '缺少合约标识' };
+  if (!/^\d{6}$/.test(code)) return { code: 400, message: '验证码格式不正确' };
+
+  const res = await db.collection('contracts').where({ contractId, openId }).limit(1).get();
+  const contract = res.data && res.data[0];
+  if (!contract) return { code: 404, message: '合约记录不存在' };
+
+  // 检查当前状态
+  const isNewSubmission = contract.status === STATES.WAIT_SMSCODE;
+  const isResubmission = contract.status === STATES.CONTRACTING && contract.smsCode;
+  const isAfterRejection = contract.status === STATES.SMS_CODE_REJECTED;
+
+  if (!isNewSubmission && !isResubmission && !isAfterRejection) {
+    return { code: 400, message: '当前状态不支持提交验证码' };
+  }
+
+  const now = nowISO();
+  await db.collection('contracts').doc(contract._id).update({
+    data: {
+      smsCode: code,
+      status: STATES.CONTRACTING,
+      smsCodeRejectedAt: null,  // 清除驳回时间
+      smsCodeRejectReason: '',  // 清除驳回原因
+      updatedAt: now
+    }
+  });
+
+  // 通知管理员：验证码待处理 或 新验证码
+  if (isResubmission || isAfterRejection) {
+    // 用户重新提交了验证码（被驳回后或验证码过期）
+    await notifyAdmins('notifyNewSmsCode', {
+      phone: contract.phone,
+      smsCode: code,
+      storeName: contract.storeName || ''
+    });
+  } else {
+    // 首次提交验证码
+    await notifyAdmins('notifySmsCodePending', {
+      phone: contract.phone,
+      smsCode: code,
+      storeName: contract.storeName || ''
+    });
+  }
+
+  return { code: 200, data: { status: STATES.CONTRACTING } };
+}
+
+async function handleGetCoupons(openId, event = {}) {
+  const contractId = String(event.contractId || '').trim();
+  if (!contractId) {
+    return { code: 200, data: [] };
+  }
+  const contractRes = await db.collection('contracts').where({
+    contractId,
+    openId
+  }).limit(1).get();
+  if (!(contractRes.data && contractRes.data.length)) {
+    return { code: 404, message: '合约记录不存在' };
+  }
+  const res = await db.collection('coupons').where({ contractId }).get();
+  return { code: 200, data: (res.data || []).map(normalizeCoupon) };
+}
+
+async function handleGenerateVerifyCode(openId, event = {}) {
+  const couponId = String(event.couponId || '').trim();
+  if (!couponId) return { code: 400, message: '缺少代金券标识' };
+
+  const couponRes = await db.collection('coupons').where({ couponId, openId }).limit(1).get();
+  const coupon = couponRes.data && couponRes.data[0];
+  if (!coupon) return { code: 404, message: '代金券不存在' };
+  if (Number(coupon.status) !== 1) return { code: 400, message: '该券不可使用' };
+
+  // 检查月份是否匹配
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (coupon.periodMonth && coupon.periodMonth !== currentMonth) {
+    return { 
+      code: 400, 
+      message: `该券仅限${coupon.periodMonth}使用，当前月份为${currentMonth}` 
+    };
+  }
+
+  // 检查本月已使用次数
+  const monthlyLimit = Number(coupon.monthlyLimit || 1);
+  const usedTimes = Number(coupon.usedTimes || 0);
+  if (usedTimes >= monthlyLimit) {
+    return { 
+      code: 400, 
+      message: `本月已使用${usedTimes}次，已达上限（${monthlyLimit}次/月）` 
+    };
+  }
+
+  const verifyCode = String(Math.floor(100000 + Math.random() * 900000));
+  const expireAt = Date.now() + 3 * 60 * 1000;
+  await db.collection('coupons').doc(coupon._id).update({
+    data: {
+      verifyCode,
+      verifyExpireAt: expireAt,
+      updatedAt: nowISO()
+    }
+  });
+  return { code: 200, data: { verifyCode, expireAt } };
+}
+
+async function handleStoreVerifyCoupon(openId, event = {}) {
+  const verifyCode = String(event.verifyCode || '').trim();
+  const storeId = String(event.storeId || '').trim();
+  if (!verifyCode || !storeId) {
+    return { code: 400, message: '参数不完整' };
+  }
+  const canVerify = await ensureStoreRole(openId, storeId);
+  if (!canVerify) {
+    return { code: 403, message: '当前账号无门店核销权限' };
+  }
+
+  const now = Date.now();
+  const res = await db.collection('coupons').where({
+    verifyCode
+  }).limit(1).get();
+  const coupon = res.data && res.data[0];
+  if (!coupon) {
+    return { code: 400, message: '核销码无效，请检查输入' };
+  }
+  if (coupon.storeId !== storeId) return { code: 403, message: '该券不属于当前门店' };
+  if (Number(coupon.status) === 2) return { code: 400, message: '该券已核销使用' };
+  if (Number(coupon.status) === 3) return { code: 400, message: '该券已过期' };
+  if (!coupon.verifyExpireAt || Number(coupon.verifyExpireAt) <= now) {
+    return { code: 400, message: '核销码已过期，请让客户重新生成' };
+  }
+
+  return {
+    code: 200,
+    data: {
+      couponId: coupon.couponId,
+      storeName: coupon.storeName,
+      amount: coupon.amount || 20,
+      contractId: coupon.contractId
+    }
+  };
+}
+
+async function handleStoreConfirmVerify(openId, event = {}) {
+  const couponId = String(event.couponId || '').trim();
+  if (!couponId) return { code: 400, message: '缺少代金券标识' };
+
+  const res = await db.collection('coupons').where({ couponId }).limit(1).get();
+  const coupon = res.data && res.data[0];
+  if (!coupon) return { code: 404, message: '代金券不存在' };
+
+  const canVerify = await ensureStoreRole(openId, coupon.storeId);
+  if (!canVerify) return { code: 403, message: '当前账号无门店核销权限' };
+
+  if (Number(coupon.status) !== 1) {
+    return { code: 400, message: '该券不可核销' };
+  }
+
+  // 更新使用次数
+  const usedTimes = Number(coupon.usedTimes || 0) + 1;
+  const monthlyLimit = Number(coupon.monthlyLimit || 1);
+  const usedCount = Number(coupon.usedCount || 0) + 1;
+
+  // 判断是否达到本月上限
+  const shouldDeactivate = usedTimes >= monthlyLimit;
+
+  await db.collection('coupons').doc(coupon._id).update({
+    data: {
+      status: shouldDeactivate ? 2 : 1, // 达到上限才标记为已使用
+      usedTimes, // 本月使用次数
+      usedCount, // 总使用次数
+      usedAt: nowISO(),
+      verifyCode: '',
+      verifyExpireAt: 0,
+      updatedAt: nowISO()
+    }
+  });
+
+  const updatedRes = await db.collection('coupons').where({ couponId }).limit(1).get();
+  const updated = updatedRes.data && updatedRes.data[0];
+
+  return {
+    code: 200,
+    data: {
+      ...normalizeCoupon(updated),
+      usedTimes,
+      monthlyLimit
+    }
+  };
+}
+
+async function handleGetStoreVerifyRecords(openId, event = {}) {
+  const storeId = String(event.storeId || '').trim();
+  if (!storeId) return { code: 200, data: { recordsByMonth: [], todayTotal: 0 } };
+
+  const canVerify = await ensureStoreRole(openId, storeId);
+  if (!canVerify) return { code: 403, message: '当前账号无门店核销权限' };
+
+  const couponsRes = await db.collection('coupons').where({
+    storeId,
+    status: 2
+  }).get();
+  const usedCoupons = couponsRes.data || [];
+  if (!usedCoupons.length) {
+    return { code: 200, data: { recordsByMonth: [], todayTotal: 0 } };
+  }
+
+  const contractIds = Array.from(new Set(
+    usedCoupons.map(item => item.contractId).filter(Boolean)
+  ));
+  const contractRes = await db.collection('contracts').where({
+    contractId: _.in(contractIds)
+  }).get();
+  const contractMap = new Map((contractRes.data || []).map(item => [item.contractId, item]));
+
+  const monthMap = {};
+  usedCoupons.forEach((coupon) => {
+    const usedAt = coupon.usedAt || nowISO();
+    const month = formatDate(usedAt).slice(0, 7);
+    if (!monthMap[month]) {
+      monthMap[month] = { month, list: [], total: 0 };
+    }
+    const contract = contractMap.get(coupon.contractId);
+    const phone = maskPhone(contract ? contract.phone : '未知');
+    const amount = Number(coupon.amount || 20);
+    monthMap[month].list.push({
+      amount,
+      phone,
+      time: formatTime(usedAt),
+      date: formatDate(usedAt)
+    });
+    monthMap[month].total += amount;
+  });
+
+  const today = formatDate(nowISO());
+  const todayTotal = usedCoupons
+    .filter(item => formatDate(item.usedAt || nowISO()) === today)
+    .reduce((sum, item) => sum + Number(item.amount || 20), 0);
+
+  return {
+    code: 200,
+    data: {
+      recordsByMonth: Object.values(monthMap).sort((a, b) => b.month.localeCompare(a.month)),
+      todayTotal
+    }
+  };
+}
+
+async function handleAdminGetContracts(openId, event = {}) {
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  if (!isAdmin) {
+    return { code: 403, message: '当前账号无管理员权限' };
+  }
+  const page = Math.max(1, Number(event.page) || 1);
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(event.pageSize) || 50));
+
+  const [res, countRes] = await Promise.all([
+    db.collection('contracts').orderBy('createdAt', 'desc').skip((page - 1) * pageSize).limit(pageSize).get(),
+    db.collection('contracts').count()
+  ]);
+
+  return {
+    code: 200,
+    data: {
+      list: (res.data || []).map(normalizeContract),
+      total: countRes.total,
+      page,
+      pageSize
+    }
+  };
+}
+
+async function handleAdminUpdateStatus(openId, event = {}) {
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  if (!isAdmin) {
+    return { code: 403, message: '当前账号无管理员权限' };
+  }
+
+  const contractId = String(event.contractId || '').trim();
+  const status = event.status !== undefined ? Number(event.status) : undefined;
+  const extra = event.extra || {};
+  if (!contractId || status === undefined || isNaN(status)) {
+    return { code: 400, message: '参数不完整' };
+  }
+
+  const contractRes = await db.collection('contracts').where({ contractId }).limit(1).get();
+  const contract = contractRes.data && contractRes.data[0];
+  if (!contract) return { code: 404, message: '合约记录不存在' };
+
+  const nextData = {
+    status,
+    updatedAt: nowISO()
+  };
+  if (typeof extra === 'object' && extra) {
+    Object.assign(nextData, extra);
+  }
+  if (status === STATES.SHIPPED && !nextData.shippedAt) {
+    nextData.shippedAt = nowISO();
+  }
+  if (status === STATES.CONTRACT_OK && !nextData.contractOkAt) {
+    nextData.contractOkAt = nowISO();
+  }
+  if (status === STATES.SIGNED && !nextData.signedAt) {
+    nextData.signedAt = nowISO();
+  }
+  // 验证码驳回时记录驳回时间和原因
+  if (status === STATES.SMS_CODE_REJECTED) {
+    nextData.smsCodeRejectedAt = nowISO();
+    nextData.smsCodeRejectReason = extra.rejectReason || '验证码无效或已过期';
+  }
+
+  await db.collection('contracts').doc(contract._id).update({ data: nextData });
+  if (status === STATES.CONTRACT_OK) {
+    await ensureCouponsForContract({ ...contract, ...nextData });
+  }
+
+  const updatedRes = await db.collection('contracts').where({ contractId }).limit(1).get();
+  const updated = updatedRes.data && updatedRes.data[0];
+  return { code: 200, data: normalizeContract(updated || {}) };
+}
+
+async function handleGetAdminStats(openId) {
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  if (!isAdmin) {
+    return { code: 403, message: '当前账号无管理员权限' };
+  }
+
+  const today = formatDate(nowISO());
+
+  const [contractsCount, pendingCount, couponsCount, storesCount] = await Promise.all([
+    db.collection('contracts').count(),
+    db.collection('contracts').where({ status: STATES.WAIT_VERIFY }).count(),
+    db.collection('coupons').count(),
+    db.collection('stores').where({ status: _.neq(0) }).count()
+  ]);
+
+  return {
+    code: 200,
+    data: {
+      pendingContracts: pendingCount.total,
+      todayContracts: 0,  // 精确的当日统计需要更复杂的日期查询，保持为 0 避免误导
+      totalCoupons: couponsCount.total,
+      totalStores: storesCount.total
+    }
+  };
+}
+
+// ========== 门店管理 ==========
+
+async function handleAdminGetStores(openId, event = {}) {
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  if (!isAdmin) {
+    return { code: 403, message: '当前账号无管理员权限' };
+  }
+  return handleGetStores(event);
+}
+
+async function handleAdminCreateStore(openId, event = {}) {
+  const isSuperAdmin = await ensureSuperAdmin(openId);
+  if (!isSuperAdmin) {
+    return { code: 403, message: '当前账号无超级管理员权限' };
+  }
+
+  const { name, province, city, district, address, owner, phone } = event;
+  // 门店名称和省市区为必填，详细地址可选
+  if (!name || !province || !city || !district) {
+    return { code: 400, message: '请填写门店名称和完整地区信息' };
+  }
+
+  const storeId = genId('S');
+  const now = nowISO();
+  const storeName = String(name).trim();
+  const ownerPhone = String(phone || '').trim();
+  const ownerName = String(owner || '').trim();
+
+  // 业务规则：一个手机号只能对应一个角色
+  // 检查该手机号是否已有待绑定邀请或已绑定角色
+  if (ownerPhone && /^1\d{10}$/.test(ownerPhone)) {
+    // 检查是否已有待绑定邀请
+    const existingInvite = await db.collection('staff_invites').where({
+      phone: ownerPhone,
+      status: 1
+    }).limit(1).get();
+
+    if (existingInvite.data && existingInvite.data.length > 0) {
+      const invite = existingInvite.data[0];
+      // 如果是当前门店的邀请，允许；否则拒绝
+      if (!(invite.roleKey === 'store_owner' && invite.scopeId === storeId)) {
+        const roleNames = { admin: '管理员', store_owner: '门店负责人', store_clerk: '店员' };
+        return {
+          code: 400,
+          message: `该手机号已有${roleNames[invite.roleKey] || '角色'}邀请待绑定，无法重复邀请`
+        };
+      }
+    }
+
+    // 检查是否已有绑定角色
+    const existingRole = await db.collection('portal_roles').where({
+      phone: ownerPhone,
+      status: 1
+    }).limit(1).get();
+
+    if (existingRole.data && existingRole.data.length > 0) {
+      const role = existingRole.data[0];
+      const roleNames = { admin: '管理员', store_owner: '门店负责人', store_clerk: '店员', super_admin: '超级管理员' };
+      return {
+        code: 400,
+        message: `该手机号已是${roleNames[role.roleKey] || '角色'}，无法重复绑定`
+      };
+    }
+  }
+
+  const store = {
+    storeId,
+    id: storeId,
+    name: storeName,
+    province: String(province).trim(),
+    city: String(city).trim(),
+    district: String(district).trim(),
+    address: String(address || '').trim(), // 可选
+    owner: ownerName,
+    phone: ownerPhone,
+    location: event.location || null,
+    status: 1,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await db.collection('stores').add({ data: store });
+
+  // 如果填写了店长手机号且校验通过，自动创建店长邀请记录
+  if (ownerPhone && /^1\d{10}$/.test(ownerPhone)) {
+    await db.collection('staff_invites').add({
+      data: {
+        phone: ownerPhone,
+        name: ownerName,
+        roleKey: 'store_owner',
+        scopeType: 'store',
+        scopeId: storeId,
+        scopeName: storeName,
+        permissions: ['coupon.verify', 'store.record.view'],
+        status: 1,
+        boundOpenId: '',
+        boundAt: '',
+        createdBy: openId,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+  }
+
+  return { code: 200, data: { storeId, ...store } };
+}
+
+async function handleAdminUpdateStore(openId, event = {}) {
+  const isSuperAdmin = await ensureSuperAdmin(openId);
+  if (!isSuperAdmin) {
+    return { code: 403, message: '当前账号无超级管理员权限' };
+  }
+
+  const { storeId, name, province, city, district, address, owner, phone } = event;
+  if (!storeId) {
+    return { code: 400, message: '缺少门店ID' };
+  }
+
+  const storeRes = await db.collection('stores').where({ storeId }).limit(1).get();
+  if (!storeRes.data || !storeRes.data[0]) {
+    return { code: 404, message: '门店不存在' };
+  }
+
+  const oldStore = storeRes.data[0];
+  const now = nowISO();
+  const oldPhone = String(oldStore.phone || '').trim();
+  const newPhone = phone !== undefined ? String(phone || '').trim() : oldPhone;
+  const newName = owner !== undefined ? String(owner || '').trim() : oldStore.owner;
+  const storeName = name !== undefined ? String(name).trim() : oldStore.name;
+
+  // 业务规则：一个手机号只能对应一个角色
+  // 如果店长手机号变更，检查新手机号是否已有角色
+  if (newPhone && newPhone !== oldPhone && /^1\d{10}$/.test(newPhone)) {
+    // 检查是否已有待绑定邀请
+    const existingInvite = await db.collection('staff_invites').where({
+      phone: newPhone,
+      status: 1
+    }).limit(1).get();
+
+    if (existingInvite.data && existingInvite.data.length > 0) {
+      const invite = existingInvite.data[0];
+      const roleNames = { admin: '管理员', store_owner: '门店负责人', store_clerk: '店员' };
+      return {
+        code: 400,
+        message: `该手机号已有${roleNames[invite.roleKey] || '角色'}邀请待绑定，无法重复邀请`
+      };
+    }
+
+    // 检查是否已有绑定角色
+    const existingRole = await db.collection('portal_roles').where({
+      phone: newPhone,
+      status: 1
+    }).limit(1).get();
+
+    if (existingRole.data && existingRole.data.length > 0) {
+      const role = existingRole.data[0];
+      const roleNames = { admin: '管理员', store_owner: '门店负责人', store_clerk: '店员', super_admin: '超级管理员' };
+      return {
+        code: 400,
+        message: `该手机号已是${roleNames[role.roleKey] || '角色'}，无法重复绑定`
+      };
+    }
+  }
+
+  const updateData = {
+    updatedAt: now
+  };
+  if (name !== undefined) updateData.name = String(name).trim();
+  if (province !== undefined) updateData.province = String(province).trim();
+  if (city !== undefined) updateData.city = String(city).trim();
+  if (district !== undefined) updateData.district = String(district).trim();
+  if (address !== undefined) updateData.address = String(address || '').trim();
+  if (owner !== undefined) updateData.owner = String(owner || '').trim();
+  if (phone !== undefined) updateData.phone = String(phone || '').trim();
+  if (event.location !== undefined) updateData.location = event.location || null;
+
+  await db.collection('stores').doc(oldStore._id).update({ data: updateData });
+
+  // 如果店长手机号变更，处理邀请记录
+  if (newPhone && newPhone !== oldPhone && /^1\d{10}$/.test(newPhone)) {
+    // 作废旧手机号的邀请（如果存在且未绑定）
+    if (oldPhone) {
+      const oldInviteRes = await db.collection('staff_invites').where({
+        phone: oldPhone,
+        scopeType: 'store',
+        scopeId: storeId,
+        boundOpenId: '',  // 未绑定
+        status: 1
+      }).limit(1).get();
+
+      if (oldInviteRes.data && oldInviteRes.data.length > 0) {
+        await db.collection('staff_invites').doc(oldInviteRes.data[0]._id).update({
+          data: { status: 0, updatedAt: now }
+        });
+      }
+    }
+
+    // 创建新手机号的邀请记录
+    await db.collection('staff_invites').add({
+      data: {
+        phone: newPhone,
+        name: newName,
+        roleKey: 'store_owner',
+        scopeType: 'store',
+        scopeId: storeId,
+        scopeName: storeName,
+        permissions: ['coupon.verify', 'store.record.view'],
+        status: 1,
+        boundOpenId: '',
+        boundAt: '',
+        createdBy: openId,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+  } else if (newPhone && newPhone === oldPhone) {
+    // 手机号未变，只更新邀请记录中的姓名等信息
+    const existingInvite = await db.collection('staff_invites').where({
+      phone: newPhone,
+      scopeType: 'store',
+      scopeId: storeId,
+      status: 1
+    }).limit(1).get();
+
+    if (existingInvite.data && existingInvite.data.length > 0) {
+      await db.collection('staff_invites').doc(existingInvite.data[0]._id).update({
+        data: {
+          name: newName,
+          scopeName: storeName,
+          updatedAt: now
+        }
+      });
+    }
+  }
+
+  return { code: 200, data: { storeId, updated: true } };
+}
+
+async function handleAdminDeleteStore(openId, event = {}) {
+  const isSuperAdmin = await ensureSuperAdmin(openId);
+  if (!isSuperAdmin) {
+    return { code: 403, message: '当前账号无超级管理员权限' };
+  }
+
+  const { storeId } = event;
+  if (!storeId) {
+    return { code: 400, message: '缺少门店ID' };
+  }
+
+  const storeRes = await db.collection('stores').where({ storeId }).limit(1).get();
+  if (!storeRes.data || !storeRes.data[0]) {
+    return { code: 404, message: '门店不存在' };
+  }
+
+  // 软删除：标记status为0
+  await db.collection('stores').doc(storeRes.data[0]._id).update({
+    data: { status: 0, updatedAt: nowISO() }
+  });
+  return { code: 200, data: { storeId, deleted: true } };
+}
+
+// ========== 代金券规则管理 ==========
+
+async function handleGetCouponRules(openId) {
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  if (!isAdmin) {
+    return { code: 403, message: '当前账号无管理员权限' };
+  }
+
+  const res = await db.collection('coupon_rules').where({
+    status: _.neq(0)
+  }).orderBy('createdAt', 'desc').get();
+
+  return { code: 200, data: res.data || [] };
+}
+
+async function handleCreateCouponRule(openId, event = {}) {
+  const isSuperAdmin = await ensureSuperAdmin(openId);
+  if (!isSuperAdmin) {
+    return { code: 403, message: '当前账号无超级管理员权限' };
+  }
+
+  const { name, amount, totalCount, validMonths, monthlyLimit, storeScope, selectedStores, notes } = event;
+
+  if (!name) return { code: 400, message: '请填写规则名称' };
+  if (!amount || amount <= 0) return { code: 400, message: '面额必须大于0' };
+  if (!validMonths || validMonths <= 0) return { code: 400, message: '有效期必须大于0' };
+  if (!monthlyLimit || monthlyLimit <= 0) return { code: 400, message: '每月限用必须大于0' };
+  if (storeScope === 'bound' && (!selectedStores || !selectedStores.length)) {
+    return { code: 400, message: '请选择至少一个绑定门店' };
+  }
+
+  const now = nowISO();
+  const rule = {
+    id: genId('R'),
+    name: String(name).trim(),
+    amount: Number(amount),
+    totalCount: Number(totalCount),
+    validMonths: Number(validMonths) || 5,
+    monthlyLimit: Number(monthlyLimit) || 1,
+    storeScope: storeScope || 'all',
+    selectedStores: storeScope === 'bound' ? (selectedStores || []) : [],
+    notes: String(notes || '').trim(),
+    status: 1,
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await db.collection('coupon_rules').add({ data: rule });
+  return { code: 200, data: rule };
+}
+
+async function handleDeleteCouponRule(openId, event = {}) {
+  const isSuperAdmin = await ensureSuperAdmin(openId);
+  if (!isSuperAdmin) {
+    return { code: 403, message: '当前账号无超级管理员权限' };
+  }
+
+  const { ruleId } = event;
+  if (!ruleId) return { code: 400, message: '缺少规则ID' };
+
+  const ruleRes = await db.collection('coupon_rules').where({ id: ruleId }).limit(1).get();
+  if (!ruleRes.data || !ruleRes.data[0]) {
+    return { code: 404, message: '规则不存在' };
+  }
+
+  // 软删除
+  await db.collection('coupon_rules').doc(ruleRes.data[0]._id).update({
+    data: { status: 0, updatedAt: nowISO() }
+  });
+
+  return { code: 200, data: { ruleId, deleted: true } };
+}
+
+/**
+ * 查询待绑定的邀请记录（根据手机号）
+ * 用于绑定页面确定用户有哪些角色可以绑定
+ */
+async function handleQueryPendingInvites(openId, event = {}) {
+  const phone = String(event.phone || '').trim();
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+    return { code: 400, message: '请输入正确的手机号' };
+  }
+  
+  // 安全检查：只允许管理员或本人查询
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  
+  // 如果不是管理员，检查是否是查询自己的手机号
+  if (!isAdmin) {
+    // 查询该手机号是否已绑定到当前用户
+    const userRes = await db.collection('portal_users').where({
+      openId,
+      phone
+    }).limit(1).get();
+    
+    if (!userRes.data || userRes.data.length === 0) {
+      // 也检查角色表中是否有该手机号绑定到当前用户
+      const roleRes = await db.collection('portal_roles').where({
+        openId,
+        phone
+      }).limit(1).get();
+      
+      if (!roleRes.data || roleRes.data.length === 0) {
+        return { 
+          code: 403, 
+          message: '无权查询该手机号信息' 
+        };
+      }
+    }
+  }
+
+  const inviteRes = await db.collection('staff_invites').where({
+    phone,
+    boundOpenId: '',  // 未绑定
+    status: 1
+  }).get();
+
+  const invites = (inviteRes.data || []).map(inv => ({
+    roleKey: inv.roleKey,
+    roleType: inv.roleKey === 'store_owner' ? '门店负责人' :
+              inv.roleKey === 'store_clerk' ? '店员' :
+              inv.roleKey === 'admin' ? '管理员' : inv.roleKey,
+    scopeType: inv.scopeType,
+    scopeId: inv.scopeId,
+    scopeName: inv.scopeName || ''
+  }));
+
+  return { code: 200, data: invites };
+}
+
+/**
+ * 获取当前用户关联的门店信息
+ */
+async function handleGetMyStore(openId) {
+  // 查询用户的角色记录
+  const roleRes = await db.collection('portal_roles').where({
+    openId,
+    status: 1
+  }).get();
+
+  const roles = roleRes.data || [];
+
+  // 找到门店相关角色
+  const storeRole = roles.find(r =>
+    r.roleKey === 'store_owner' || r.roleKey === 'store_clerk'
+  );
+
+  if (!storeRole || !storeRole.scopeId) {
+    return { code: 404, message: '未分配门店' };
+  }
+
+  // 查询门店详情
+  const storeRes = await db.collection('stores').where({
+    storeId: storeRole.scopeId
+  }).limit(1).get();
+
+  const store = storeRes.data && storeRes.data[0];
+
+  if (!store) {
+    return { code: 404, message: '门店不存在' };
+  }
+
+  return {
+    code: 200,
+    data: {
+      storeId: store.storeId || store.id,
+      name: store.name || '',
+      address: store.address || '',
+      province: store.province || '',
+      city: store.city || '',
+      district: store.district || '',
+      phone: store.phone || '',
+      owner: store.owner || ''
+    }
+  };
+}
+
+/**
+ * 获取当前用户资料、合约列表和代金券统计
+ */
+async function handleGetUserInfo(openId, event = {}) {
+  try {
+    // 1. 获取用户资料
+    const usersCollection = db.collection('portal_users');
+    const userRes = await usersCollection.where({ openId }).limit(1).get();
+    if (userRes.data.length === 0) {
+      return { code: 404, message: '用户不存在' };
+    }
+    const user = userRes.data[0];
+
+    // 2. 获取用户的合约列表
+    let contracts = [];
+    if (user.phone) {
+      const contractsCollection = db.collection('contracts');
+      const contractRes = await contractsCollection.where({ phone: user.phone }).orderBy('createdAt', 'desc').get();
+      contracts = (contractRes.data || []).map(c => ({
+        _id: c._id,
+        contractId: c.contractId || c.id || '',
+        phone: c.phone || '',
+        name: c.name || '',
+        idCard: c.idCard || '',
+        address: c.address || '',
+        status: c.status !== undefined ? c.status : 0,
+        storeId: c.storeId || '',
+        storeName: c.storeName || '',
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt
+      }));
+    }
+
+    // 3. 获取代金券统计
+    let totalCoupons = 0;
+    let activeCoupons = 0;
+    let usedCoupons = 0;
+    let pendingCoupons = 0;
+
+    if (contracts.length > 0) {
+      const contractIds = contracts.map(c => c._id);
+      const couponsCollection = db.collection('coupons');
+      const couponRes = await couponsCollection.where({
+        contractId: _.in(contractIds)
+      }).get();
+      const allCoupons = couponRes.data || [];
+      totalCoupons = allCoupons.length;
+      activeCoupons = allCoupons.filter(c => Number(c.status) === 1).length;
+      usedCoupons = allCoupons.filter(c => Number(c.status) === 2).length;
+      pendingCoupons = allCoupons.filter(c => Number(c.status) === 0).length;
+    }
+
+    return {
+      code: 200,
+      data: {
+        user: {
+          _id: user._id,
+          openId: user.openId,
+          nickName: user.nickName || '',
+          avatarUrl: user.avatarUrl || '',
+          phone: user.phone || '',
+          createdAt: user.createdAt
+        },
+        contracts,
+        couponStats: {
+          total: totalCoupons,
+          pending: pendingCoupons,
+          active: activeCoupons,
+          used: usedCoupons
+        }
+      }
+    };
+  } catch (e) {
+    console.error('handleGetUserInfo error:', e);
+    return { code: 500, message: e.message || '获取用户信息失败' };
+  }
+}
+
+async function handleExportContracts(openId) {
+  const isAdmin = await ensureRole(openId, ['admin', 'super_admin']);
+  if (!isAdmin) {
+    return { code: 403, message: '当前账号无管理员权限' };
+  }
+
+  const res = await db.collection('contracts').orderBy('createdAt', 'desc').get();
+  const contracts = res.data || [];
+
+  return {
+    code: 200,
+    data: contracts.map(contract => ({
+      contractId: contract.contractId || contract.id,
+      phone: contract.phone || '',
+      storeName: contract.storeName || '',
+      status: contract.status || 0,
+      statusText: {
+        0: '已拒绝',
+        1: '待核验',
+        2: '核验通过',
+        3: '待验证码',
+        4: '办理中',
+        5: '合约已办',
+        6: '已发货',
+        7: '已完成',
+        8: '验证码被驳回'
+      }[contract.status] || '未知',
+      createdAt: contract.createdAt || '',
+      updatedAt: contract.updatedAt || '',
+      name: contract.name || '',
+      address: contract.address || '',
+      trackingNo: contract.trackingNo || ''
+    }))
+  };
+}
+
+/**
+ * 移动回调：激活指定合约期数的代金券（status: 0 → 1）
+ * 由河北移动系统在处理合约完成后回调
+ */
+async function handleActivateCoupon(openId, event = {}) {
+  const { contractId, period, authToken } = event;
+
+  // Simple auth check (placeholder — enhance for production)
+  if (!authToken || authToken !== 'zjh_callback_2024') {
+    return { code: 403, message: 'unauthorized' };
+  }
+
+  if (!contractId || !period) {
+    return { code: 400, message: '缺少参数 contractId 或 period' };
+  }
+
+  const now = Date.now();
+  const couponsCollection = db.collection('coupons');
+
+  // Find coupons for this contract + period with status=0
+  const res = await couponsCollection.where({
+    contractId,
+    period: Number(period),
+    status: 0
+  }).get();
+
+  if (res.data.length === 0) {
+    return { code: 404, message: '未找到待激活的券或已激活' };
+  }
+
+  // Activate all matching coupons
+  const updatePromises = res.data.map(c => {
+    return couponsCollection.doc(c._id).update({
+      data: {
+        status: 1,
+        activateDate: now,
+        updatedAt: now
+      }
+    });
+  });
+
+  await Promise.all(updatePromises);
+
+  return {
+    code: 200,
+    message: 'ok',
+    data: {
+      activatedCount: res.data.length,
+      period: Number(period),
+      contractId
+    }
+  };
+}
+
+/**
+ * 生成管理员扫码登录的小程序码
+ */
+/**
+ * 管理员在小程序中确认登录（管理员打开 loginConfirm 页面后点击确认按钮）
+ * 通过云函数直接调用，getWXContext() 可获取真实 OPENID
+ */
+async function handleAdminConfirmLogin(OPENID, event) {
+  const scene = String(event.scene || '').trim();
+
+  // 验证当前用户是否为管理员
+  const { data: roles } = await db.collection('portal_roles')
+    .where({
+      openId: OPENID,
+      roleKey: _.in(['admin', 'super_admin']),
+      status: 1
+    }).limit(1).get();
+
+  if (!roles.length) {
+    return { code: 403, message: '仅管理员可登录管理后台' };
+  }
+
+  // 更新登录 session 状态
+  const query = scene ? { scene } : { status: 0 };
+  let sessionQuery = db.collection('login_sessions').where(query);
+  if (!scene) {
+    sessionQuery = sessionQuery.orderBy('createdAt', 'desc');
+  }
+  const update = await sessionQuery.limit(1).update({
+    data: { openId: OPENID, status: 1, updatedAt: Date.now() }
+  });
+
+  if (update.stats.updated === 0) {
+    return { code: 404, message: '未找到待确认的登录请求' };
+  }
+
+  return { code: 200, data: { openId: OPENID } };
+}
+
+exports.main = async (event = {}) => {
+  const { OPENID: WX_OPENID } = cloud.getWXContext();
+  const OPENID = event._bypassOpenId || WX_OPENID;
+  const action = String(event.action || '').trim();
+
+  // 频率限制检查
+  if (action) {
+    const rateCheck = await checkRateLimit(OPENID, action);
+    if (!rateCheck.allowed) {
+      return { code: 429, message: rateCheck.message };
+    }
+  }
+
+  try {
+    if (action === 'updateUserProfile') return handleUpdateUserProfile(OPENID, event);
+    if (action === 'getStores') return handleGetStores(event);
+    if (action === 'getCurrentContractId') return handleGetCurrentContractId(OPENID);
+    if (action === 'createNewContract') return handleCreateNewContract(OPENID);
+    if (action === 'getContractStatus') return handleGetContractStatus(OPENID, event);
+    if (action === 'submitPhone') return handleSubmitPhone(OPENID, event);
+    if (action === 'submitOrderInfo') return handleSubmitOrderInfo(OPENID, event);
+    if (action === 'submitSmsCode') return handleSubmitSmsCode(OPENID, event);
+    if (action === 'getCoupons') return handleGetCoupons(OPENID, event);
+    if (action === 'activateCoupon') return handleActivateCoupon(OPENID, event);
+    if (action === 'generateVerifyCode') return handleGenerateVerifyCode(OPENID, event);
+    if (action === 'storeVerifyCoupon') return handleStoreVerifyCoupon(OPENID, event);
+    if (action === 'storeConfirmVerify') return handleStoreConfirmVerify(OPENID, event);
+    if (action === 'getStoreVerifyRecords') return handleGetStoreVerifyRecords(OPENID, event);
+    if (action === 'adminGetContracts') return handleAdminGetContracts(OPENID, event);
+    if (action === 'adminUpdateStatus') return handleAdminUpdateStatus(OPENID, event);
+    if (action === 'getAdminStats') return handleGetAdminStats(OPENID);
+    if (action === 'adminGetStores') return handleAdminGetStores(OPENID, event);
+    if (action === 'adminCreateStore') return handleAdminCreateStore(OPENID, event);
+    if (action === 'adminUpdateStore') return handleAdminUpdateStore(OPENID, event);
+    if (action === 'adminDeleteStore') return handleAdminDeleteStore(OPENID, event);
+    if (action === 'getCouponRules') return handleGetCouponRules(OPENID);
+    if (action === 'createCouponRule') return handleCreateCouponRule(OPENID, event);
+    if (action === 'deleteCouponRule') return handleDeleteCouponRule(OPENID, event);
+    if (action === 'queryPendingInvites') return handleQueryPendingInvites(OPENID, event);
+    if (action === 'getMyStore') return handleGetMyStore(OPENID);
+    if (action === 'getUserInfo') return handleGetUserInfo(OPENID, event);
+    if (action === 'exportContracts') return handleExportContracts(OPENID);
+    if (action === 'adminConfirmLogin') return handleAdminConfirmLogin(OPENID, event);
+
+    return { code: 400, message: '不支持的操作类型' };
+  } catch (error) {
+    console.error('portalBiz 错误:', error);
+    return {
+      code: 500,
+      message: error && error.message ? error.message : '服务异常'
+    };
+  }
+};

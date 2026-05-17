@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "管理后台",
+  "usingComponents": {
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}

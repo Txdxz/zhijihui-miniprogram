@@ -1,0 +1,137 @@
+<view class="page">
+  <!-- 骨架屏 -->
+  <skeleton wx:if="{{pageLoading}}" loading="{{pageLoading}}" type="card" item-count="1" />
+
+  <!-- 错误状态 -->
+  <view wx:elif="{{pageError}}" class="error-state">
+    <view class="error-state__icon">⚠️</view>
+    <text class="error-state__text">{{pageError}}</text>
+    <button class="retry-btn" bindtap="onPullDownRefresh" size="mini">重试</button>
+  </view>
+
+  <block wx:else>
+  <view class="custom-nav">
+    <view class="nav-back" bindtap="navigateBack">
+      <text class="nav-back-text">← 返回</text>
+    </view>
+    <text class="nav-title">门店核销</text>
+    <view class="nav-placeholder" />
+  </view>
+
+  <view class="hero">
+    <text class="hero-title">门店核销</text>
+    <text class="hero-sub">扫码或输入 6 位核销码</text>
+  </view>
+
+  <view class="sheet store-sheet">
+    <text class="sheet-label">当前门店</text>
+    <text class="store-name">{{currentStore.name || '未分配门店'}}</text>
+    <text class="store-addr">{{currentStore.address || '请联系超级管理员配置门店权限'}}</text>
+  </view>
+
+  <view class="sheet today-sheet" wx:if="{{todayTotal > 0}}">
+    <text class="today-label">今日已核销</text>
+    <text class="today-amount">¥{{todayTotal}}</text>
+  </view>
+
+  <view class="sheet scan-sheet">
+    <van-tabs active="{{ scanTabIndex }}" color="#07c160" title-active-color="#07c160" bind:change="onScanTabChange" swipeable="{{false}}">
+      <van-tab title="扫一扫" name="scan">
+        <view class="tab-body">
+          <view class="scan-zone" bindtap="scanQRCode">
+            <van-icon name="scan" size="32" color="#07c160" />
+            <text class="scan-main">点击扫码核销</text>
+            <text class="scan-sub">对准顾客手机上的二维码</text>
+          </view>
+        </view>
+      </van-tab>
+      <van-tab title="手动输入" name="manual">
+        <view class="tab-body manual-body">
+          <van-field
+            value="{{ verifyCode }}"
+            type="digit"
+            maxlength="6"
+            placeholder="请输入 6 位数字核销码"
+            border="{{ false }}"
+            error-message="{{ verifyError }}"
+            custom-class="verify-field"
+            bind:change="onCodeInput"
+          />
+          <van-button
+            type="primary"
+            block
+            round
+            loading="{{ querying }}"
+            disabled="{{ verifyCode.length < 6 }}"
+            color="linear-gradient(90deg, #52C41A, #389E0D)"
+            bind:click="queryCode"
+          >查询核销码</van-button>
+        </view>
+      </van-tab>
+    </van-tabs>
+  </view>
+
+  <view class="sheet" wx:if="{{showConfirm}}">
+    <text class="block-title">确认核销</text>
+    <van-cell-group inset>
+      <van-cell title="券面额" value="¥{{confirmInfo.amount}}" />
+      <van-cell title="适用门店" value="{{confirmInfo.storeName}}" />
+      <van-cell title="状态" value="核销码有效" />
+    </van-cell-group>
+    <view class="notice-strip">
+      <text class="notice-strip-text">请核对信息后核销，将减免 ¥{{confirmInfo.amount}}</text>
+    </view>
+    <van-button
+      type="primary"
+      block
+      round
+      loading="{{ verifying }}"
+      color="linear-gradient(90deg, #52C41A, #389E0D)"
+      bind:click="confirmVerify"
+    >确认核销</van-button>
+  </view>
+
+  <view class="sheet success-sheet" wx:if="{{showSuccess}}">
+    <van-icon name="passed" size="56" color="#07c160" class="success-ico" />
+    <text class="success-title">核销成功</text>
+    <text class="success-desc">已为顾客优惠 ¥{{confirmInfo.amount}}</text>
+    <text class="success-hint" wx:if="{{confirmInfo.monthlyLimit > 1 && !confirmInfo.isMonthlyUsedUp}}">
+      该券本月剩余 {{confirmInfo.remainingTimes}} 次使用机会
+    </text>
+    <text class="success-hint warning" wx:if="{{confirmInfo.isMonthlyUsedUp}}">
+      该券本月已用完，下月恢复
+    </text>
+    <van-button type="primary" plain block round hairline bind:click="resetPage">继续核销</van-button>
+  </view>
+
+  <view class="sheet" wx:if="{{recordsByMonth.length > 0}}">
+    <view class="block-header">
+      <text class="block-title">核销记录</text>
+      <van-button type="primary" size="small" bind:click="exportVerifyRecords">导出记录</van-button>
+    </view>
+    <view wx:for="{{recordsByMonth}}" wx:key="month" class="month-block">
+      <view class="month-head">
+        <text class="month-label">{{item.month}}</text>
+        <text class="month-sum">合计 ¥{{item.total}}</text>
+      </view>
+      <van-cell-group inset custom-class="record-cells">
+        <van-cell
+          wx:for="{{item.list}}"
+          wx:key="index"
+          wx:for-item="rec"
+          title="{{rec.phone}}"
+          label="{{rec.date}} {{rec.time}}"
+          value="¥{{rec.amount}}"
+        />
+      </van-cell-group>
+    </view>
+  </view>
+
+  <view class="footer-safe">
+    <text class="footer-text">有疑问请联系运营或管理员</text>
+  </view>
+
+  <van-toast id="van-toast" />
+  <van-dialog id="van-dialog" />
+  </block>
+</view>

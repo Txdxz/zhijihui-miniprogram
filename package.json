@@ -1,0 +1,17 @@
+{
+  "name": "zhijihui-miniprogram",
+  "version": "1.0.0",
+  "description": "> 微信小程序前端原型，用于业务流程演示和开发参考",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vant/weapp": "^1.11.7",
+    "@wxobs/miniprogram-helper": "^0.6.10",
+    "weapp-qrcode": "^1.0.0"
+  }
+}

@@ -1,0 +1,45 @@
+<view class="bind-container">
+  <view class="bind-header">
+    <view class="bind-icon">🔐</view>
+    <text class="bind-title">身份认证</text>
+    <text class="bind-desc">{{inviteHint || '请输入您的手机号，完成身份绑定'}}</text>
+  </view>
+
+  <view class="bind-form">
+    <view class="form-item">
+      <text class="form-label">手机号</text>
+      <input
+        class="form-input native-input"
+        value="{{phone}}"
+        placeholder="请输入被邀请时填写的手机号"
+        type="number"
+        maxlength="11"
+        bindinput="onPhoneInput"
+      />
+      <view class="error-message" wx:if="{{error}}">{{error}}</view>
+    </view>
+
+    <van-button
+      type="primary"
+      block
+      loading="{{binding}}"
+      disabled="{{binding || phone.length !== 11}}"
+      bind:tap="onBindRole"
+    >立即绑定</van-button>
+  </view>
+
+  <!-- 绑定成功提示 -->
+  <view class="result-box" wx:if="{{result}}">
+    <view class="result-icon success">✓</view>
+    <text class="result-title">{{result.message}}</text>
+    <text class="result-tip">正在跳转...</text>
+  </view>
+
+  <view class="bind-footer">
+    <text class="footer-tip">请输入管理员创建邀请时填写的手机号</text>
+    <text class="footer-link" bindtap="onGoBack">返回首页</text>
+  </view>
+
+  <!-- Vant Toast -->
+  <van-toast id="van-toast" />
+</view>

@@ -1,0 +1,57 @@
+<view class="launch-page">
+  <view class="hero">
+    <view class="brand-badge">智机惠</view>
+    <text class="brand-name">智机惠</text>
+    <text class="brand-slogan">全场景聚合服务，让每一次选择更值。</text>
+  </view>
+
+  <view class="panel">
+    <view class="status-box" wx:if="{{statusText || authorizing || resolving}}">
+      <van-loading wx:if="{{authorizing || resolving}}" size="20px" type="spinner" />
+      <text class="status-text">{{statusText}}</text>
+    </view>
+
+    <van-button
+      type="primary"
+      round
+      block
+      color="linear-gradient(135deg, #1677FF 0%, #0051D4 100%)"
+      loading="{{authorizing || resolving}}"
+      bind:tap="onWechatLogin"
+    >进入小程序</van-button>
+
+    <view class="bind-entry">
+      <text class="bind-tip">收到管理员邀请？</text>
+      <text class="bind-link" bindtap="onGoBind">点击绑定角色</text>
+    </view>
+
+    <text class="panel-note">点击后将自动识别您的身份并进入对应页面。</text>
+  </view>
+
+  <van-popup
+    show="{{showRoleChooser}}"
+    round
+    position="bottom"
+    close-on-click-overlay="{{false}}"
+  >
+    <view class="popup-card">
+      <text class="popup-title">请选择本次进入身份</text>
+      <text class="popup-desc">同一个微信可对应不同入口，选择后会记住本次偏好。</text>
+      <view class="role-list">
+        <button
+          wx:for="{{roleOptions}}"
+          wx:key="key"
+          class="role-option"
+          data-role="{{item.key}}"
+          bindtap="onChooseRole"
+        >
+          <view class="role-option-main">
+            <text class="role-option-title">{{item.title}}</text>
+            <text class="role-option-desc">{{item.desc}}</text>
+          </view>
+          <text class="role-option-arrow">›</text>
+        </button>
+      </view>
+    </view>
+  </van-popup>
+</view>

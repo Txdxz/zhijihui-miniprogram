@@ -1,0 +1,20 @@
+{
+  "navigationBarTitleText": "智机惠",
+  "navigationBarBackgroundColor": "#1677FF",
+  "navigationBarTextStyle": "white",
+  "backgroundColor": "#F5F7FA",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "van-steps": "@vant/weapp/steps/index",
+    "van-field": "@vant/weapp/field/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-tag": "@vant/weapp/tag/index",
+    "van-picker": "@vant/weapp/picker/index",
+    "van-popup": "@vant/weapp/popup/index",
+    "van-checkbox": "@vant/weapp/checkbox/index",
+    "van-checkbox-group": "@vant/weapp/checkbox-group/index",
+    "van-loading": "@vant/weapp/loading/index",
+    "van-toast": "@vant/weapp/toast/index",
+    "skeleton": "/components/skeleton/index"
+  }
+}

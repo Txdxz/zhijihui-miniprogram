@@ -1,0 +1,632 @@
+<view class="container">
+  <!-- 顶部导航 - Vant Tabs -->
+  <view class="admin-header">
+    <view class="admin-title">智机惠管理后台</view>
+  </view>
+
+  <van-tabs active="{{ activeTab }}" bind:change="switchTab" sticky>
+    <!-- ===== 合约管理 ===== -->
+    <van-tab name="contract" title="合约管理">
+      <view class="tab-panel-content">
+      <!-- 状态快捷筛选 -->
+      <scroll-view scroll-x class="status-filter-scroll">
+        <view class="status-filter-row">
+          <view class="status-chip {{contractFilter === -1 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{-1}}">
+            全部<text wx:if="{{contractFilter === -1}}"> ({{contractsAll.length}})</text>
+          </view>
+          <view class="status-chip chip-warn {{contractFilter === 1 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{1}}">
+            待核验<text wx:if="{{pendingCount > 0}}" class="badge">{{pendingCount}}</text>
+          </view>
+          <view class="status-chip chip-blue {{contractFilter === 4 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{4}}">
+            办理中<text wx:if="{{processingCount > 0}}" class="badge">{{processingCount}}</text>
+          </view>
+          <view class="status-chip chip-orange {{contractFilter === 5 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{5}}">
+            待发货<text wx:if="{{waitShipCount > 0}}" class="badge">{{waitShipCount}}</text>
+          </view>
+          <view class="status-chip chip-green {{contractFilter === 6 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{6}}">
+            已发货
+          </view>
+          <view class="status-chip chip-reject {{contractFilter === 0 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{0}}">
+            已拒绝<text wx:if="{{rejectedCount > 0}}" class="badge">{{rejectedCount}}</text>
+          </view>
+          <view class="status-chip chip-grey {{contractFilter === 99 ? 'active' : ''}}" bindtap="setContractFilter" data-val="{{99}}">
+            已完成
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="filter-count">共 {{contracts.length}} 条记录</view>
+
+      <!-- 合约列表 -->
+      <view class="contract-list">
+        <view class="contract-item" wx:for="{{contracts}}" wx:key="id">
+          <view class="contract-header">
+            <text class="contract-phone">{{item.phone}}</text>
+            <van-tag type="{{item.status === 0 ? 'danger' : item.status === 1 ? 'warning' : item.status === 4 ? 'primary' : item.status === 5 ? 'warning' : item.status >= 6 ? 'success' : 'default'}}" plain size="medium">{{item.statusText}}</van-tag>
+          </view>
+          <view class="contract-info">
+            <text class="info-item">{{item.storeName}}</text>
+            <text class="info-item">{{item.createdAt}}</text>
+            <text class="info-item" wx:if="{{item.name}}">{{item.name}}</text>
+            <text class="info-item" wx:if="{{item.address}}">{{item.address}}</text>
+            <text class="info-item" wx:if="{{item.trackingNo}}">快递：{{item.trackingNo}}</text>
+          </view>
+
+          <!-- 操作区：根据状态显示对应按钮 -->
+          <!-- 待核验 -->
+          <view class="action-group" wx:if="{{item.status === 1}}">
+            <view class="action-tip">客户已提交手机号，请核验资格</view>
+            <view class="action-btns">
+              <van-button type="success" size="small" bind:click="passVerify" data-id="{{item.id}}" loading="{{processingId === item.id}}">核验通过</van-button>
+              <van-button type="danger" size="small" plain bind:click="rejectVerify" data-id="{{item.id}}">拒绝</van-button>
+            </view>
+          </view>
+
+          <!-- 核验通过，等待客户填写信息 -->
+          <view class="action-hint-box" wx:if="{{item.status === 2}}">
+            <text>等待客户填写收货信息...</text>
+          </view>
+
+          <!-- 等待验证码 -->
+          <view class="action-hint-box" wx:if="{{item.status === 3}}">
+            <text>等待客户提交短信验证码...</text>
+          </view>
+
+          <!-- 合约办理中 -->
+          <view class="action-group" wx:if="{{item.status === 4}}">
+            <view class="action-tip">客户已提交验证码，请在移动系统完成合约办理</view>
+            <view class="sms-code-box" wx:if="{{item.smsCode}}">
+              <text class="sms-code-label">验证码：</text>
+              <text class="sms-code-val">{{item.smsCode}}</text>
+            </view>
+            <view class="action-btns">
+              <van-button type="primary" size="small" bind:click="completeContract" data-id="{{item.id}}" loading="{{processingId === item.id}}">合约办理完成</van-button>
+              <van-button type="danger" size="small" plain bind:click="rejectSmsCode" data-id="{{item.id}}" data-phone="{{item.phone}}">驳回验证码</van-button>
+            </view>
+          </view>
+
+          <!-- 验证码被驳回，等待用户重新提交 -->
+          <view class="action-group warning-box" wx:if="{{item.status === 8}}">
+            <view class="action-tip warning-text">验证码已驳回，等待用户重新提交</view>
+            <view class="sms-code-box" wx:if="{{item.smsCodeRejectReason}}">
+              <text class="sms-code-label">驳回原因：</text>
+              <text class="sms-code-val warning-text">{{item.smsCodeRejectReason}}</text>
+            </view>
+            <view class="rejected-sms" wx:if="{{item.smsCode}}">
+              <text class="sms-code-label">原验证码：</text>
+              <text class="sms-code-val strikethrough">{{item.smsCode}}</text>
+            </view>
+          </view>
+
+          <!-- 合约已办，等待发货 -->
+          <view class="action-group" wx:if="{{item.status === 5}}">
+            <view class="action-tip">合约已办，请填写快递单号并发货</view>
+            <view class="tracking-row">
+              <van-field
+                value="{{item._trackingNo}}"
+                placeholder="填写快递单号（可选）"
+                border="{{false}}"
+                data-id="{{item.id}}"
+                bind:change="onTrackingInput"
+              />
+            </view>
+            <van-button type="primary" size="small" bind:click="shipOrder" data-id="{{item.id}}" loading="{{processingId === item.id}}">确认发货</van-button>
+          </view>
+
+          <!-- 已发货/已完成 -->
+          <view class="action-hint-box success-hint" wx:if="{{item.status === 6}}">
+            <text>已发货：{{item.trackingNo || '无单号'}}</text>
+          </view>
+          <view class="action-hint-box success-hint" wx:if="{{item.status === 7}}">
+            <text>已完成</text>
+          </view>
+        </view>
+
+        <van-empty wx:if="{{contracts.length === 0}}" description="暂无合约记录" />
+      </view>
+
+      <!-- 导出合约记录 - 按月对账 -->
+      <view class="export-section export-card">
+        <view class="export-card-header">
+          <text class="export-title">合约对账</text>
+        </view>
+        <view class="export-filter-row">
+          <text class="export-label">选择月份</text>
+          <view class="export-picker-wrap">
+            <picker mode="selector" range="{{exportMonthLabels}}" value="{{contractExportMonthIndex}}" bindchange="onContractMonthPick">
+              <view class="picker-inline">
+                <text>{{exportMonthLabels[contractExportMonthIndex]}}</text>
+                <text class="picker-arrow">›</text>
+              </view>
+            </picker>
+          </view>
+        </view>
+        <view class="export-stats-row" wx:if="{{contractExportStats.count > 0}}">
+          <text class="export-stat-num">{{contractExportStats.count}}</text>
+          <text class="export-stat-label">条记录</text>
+          <text class="export-stat-divider">|</text>
+          <text class="export-stat-num">¥{{contractExportStats.amount || 0}}</text>
+          <text class="export-stat-label">结算金额</text>
+        </view>
+        <view class="export-stats-row" wx:else>
+          <text class="export-stat-empty">该月份暂无记录</text>
+        </view>
+        <van-button type="primary" block bind:click="downloadContractReport" loading="{{downloading}}" disabled="{{contractExportStats.count === 0}}">生成对账单文件（CSV）</van-button>
+      </view>
+      </view><!-- /tab-panel-content -->
+    </van-tab>
+
+    <!-- ===== 代金券管理 ===== -->
+    <van-tab name="coupon" title="代金券" wx:if="{{canManageCouponOps}}">
+      <view class="tab-panel-content">
+      <!-- 汇总统计 -->
+      <view class="summary-row">
+        <view class="summary-item">
+          <text class="summary-num">{{couponStats.total}}</text>
+          <text class="summary-label">总券数</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-num color-warn">{{couponStats.available}}</text>
+          <text class="summary-label">待使用</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-num color-success">{{couponStats.used}}</text>
+          <text class="summary-label">已核销</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-num color-primary">¥{{couponStats.totalAmount}}</text>
+          <text class="summary-label">结算金额</text>
+        </view>
+      </view>
+
+      <!-- 代金券规则管理 -->
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">代金券规则</text>
+          <van-button type="primary" size="small" bind:click="toggleAddRuleForm">
+            {{showAddRuleForm ? '取消' : '+ 新建代金券'}}
+          </van-button>
+        </view>
+
+        <!-- 规则列表 -->
+        <view wx:for="{{couponRules}}" wx:key="id" class="rule-item-card">
+          <view class="rule-item-header">
+            <text class="rule-item-name">{{item.name}}</text>
+            <van-button type="danger" size="small" plain bind:click="deleteRule" data-id="{{item.id}}">删除</van-button>
+          </view>
+          <view class="rule-item-row">
+            <text class="rule-item-label">面额</text>
+            <text class="rule-item-val color-primary">¥{{item.amount}}</text>
+            <text class="rule-item-label">总数量</text>
+            <text class="rule-item-val">{{item.totalCount}} 张</text>
+          </view>
+          <view class="rule-item-row">
+            <text class="rule-item-label">有效期</text>
+            <text class="rule-item-val">{{item.validMonths}} 个月</text>
+            <text class="rule-item-label">每月限用</text>
+            <text class="rule-item-val">{{item.monthlyLimit}} 张</text>
+          </view>
+          <view class="rule-item-row">
+            <text class="rule-item-label">门店范围</text>
+            <text class="rule-item-val">{{item.storeScope === 'bound' ? '仅限绑定门店' : '全部门店'}}</text>
+          </view>
+          <view class="rule-item-row" wx:if="{{item.storeScope === 'bound' && item.selectedStores && item.selectedStores.length > 0}}">
+            <text class="rule-item-label">绑定门店</text>
+            <text class="rule-item-val">{{item.selectedStores.length}} 家门店</text>
+          </view>
+          <view class="rule-item-row" wx:if="{{item.notes}}">
+            <text class="rule-item-label">备注</text>
+            <text class="rule-item-val rule-notes">{{item.notes}}</text>
+          </view>
+        </view>
+        <van-empty wx:if="{{couponRules.length === 0}}" description="暂无代金券规则" />
+
+        <!-- 新建规则表单 -->
+        <view class="add-rule-form" wx:if="{{showAddRuleForm}}">
+          <view class="add-rule-form-title">新建代金券</view>
+          <view class="form-row">
+            <text class="form-label">规则名称</text>
+            <van-field value="{{newRule.name}}" placeholder="如：标准代金券" border="{{false}}" bind:change="onRuleName" />
+          </view>
+          <view class="form-row">
+            <text class="form-label">单券面额 (¥)</text>
+            <van-field value="{{newRule.amountStr}}" placeholder="20" type="digit" border="{{false}}" bind:change="onRuleAmount" />
+          </view>
+          <view class="form-row">
+            <text class="form-label">发放总数量 (张)</text>
+            <van-field value="{{newRule.totalCountStr}}" placeholder="5" type="digit" border="{{false}}" bind:change="onRuleCount" />
+          </view>
+          <view class="form-row">
+            <text class="form-label">有效期 (月)</text>
+            <van-field value="{{newRule.validMonthsStr}}" placeholder="5" type="digit" border="{{false}}" bind:change="onRuleMonths" />
+          </view>
+          <view class="form-row">
+            <text class="form-label">每月限用 (张)</text>
+            <van-field value="{{newRule.monthlyLimitStr}}" placeholder="1" type="digit" border="{{false}}" bind:change="onRuleMonthlyLimit" />
+          </view>
+          <view class="form-row">
+            <text class="form-label">可用门店</text>
+            <picker mode="selector" range="{{storeScopeLabels}}" value="{{newRule.storeScopeIndex}}" bindchange="onRuleScopePick">
+              <view class="picker-inline">
+                <text>{{storeScopeLabels[newRule.storeScopeIndex]}}</text>
+                <text class="picker-arrow">›</text>
+              </view>
+            </picker>
+          </view>
+          <!-- 绑定门店选择（仅"仅限绑定门店"时显示） -->
+          <view class="form-row" wx:if="{{newRule.storeScopeIndex === 0}}">
+            <text class="form-label">选择绑定门店 <text class="required-mark">*</text></text>
+            
+            <!-- 门店筛选（当有门店时显示） -->
+            <view class="coupon-store-filter" wx:if="{{stores.length > 0}}">
+              <van-search
+                value="{{ storeSearchKeyword }}"
+                placeholder="搜索门店名称/地址/负责人"
+                shape="round"
+                bind:change="onStoreSearchInput"
+                bind:search="onStoreSearchSubmit"
+                bind:clear="onStoreSearchClear"
+              ></van-search>
+              
+              <!-- 省市区三级筛选 -->
+              <view class="store-area-filter">
+                <!-- 省级筛选 -->
+                <view class="region-filter-row">
+                  <view 
+                    wx:for="{{storeProvinces}}" 
+                    wx:key="*this"
+                    class="region-chip {{storeFilterProvince === item ? 'active' : ''}}" 
+                    bindtap="setStoreProvinceFilter" 
+                    data-val="{{item}}"
+                  >{{item}}</view>
+                </view>
+                <!-- 市级筛选 -->
+                <view class="region-filter-row" wx:if="{{storeCities.length > 1}}">
+                  <view 
+                    wx:for="{{storeCities}}" 
+                    wx:key="*this"
+                    class="region-chip {{storeFilterCity === item ? 'active' : ''}}" 
+                    bindtap="setStoreCityFilter" 
+                    data-val="{{item}}"
+                  >{{item}}</view>
+                </view>
+                <!-- 区级筛选 -->
+                <view class="region-filter-row" wx:if="{{storeDistricts.length > 1}}">
+                  <view 
+                    wx:for="{{storeDistricts}}" 
+                    wx:key="*this"
+                    class="region-chip {{storeFilterDistrict === item ? 'active' : ''}}" 
+                    bindtap="setStoreDistrictFilter" 
+                    data-val="{{item}}"
+                  >{{item}}</view>
+                </view>
+              </view>
+            </view>
+            
+            <view class="store-selector-wrap">
+              <view class="store-checklist">
+                <view 
+                  class="store-check-item {{item.selected ? 'checked' : ''}}" 
+                  wx:for="{{ruleStoresWithSelected}}" 
+                  wx:key="id"
+                  bindtap="toggleRuleStore"
+                  data-id="{{item.id}}"
+                >
+                  <text class="check-icon">{{item.selected ? '✓' : ''}}</text>
+                  <view class="store-check-info">
+                    <text class="check-name">{{item.name}}</text>
+                    <text class="check-address">{{item.fullAddress}}</text>
+                  </view>
+                </view>
+              </view>
+              <view class="store-selector-tip" wx:if="{{stores.length === 0}}">暂无门店，请先添加门店</view>
+              <view class="store-selector-tip" wx:if="{{stores.length > 0 && filteredStores.length === 0}}">
+                {{storeSearchKeyword ? '无匹配门店，请调整搜索条件' : '暂无符合筛选条件的门店'}}
+              </view>
+              <view class="store-selector-tip" wx:if="{{stores.length > 0 && filteredStores.length > 0 && ruleSelectedCount === 0}}">
+                请点击选择门店（可多选）
+              </view>
+              <view class="store-selected-count" wx:if="{{ruleSelectedCount > 0}}">
+                已选择 {{ruleSelectedCount}} 家门店
+              </view>
+            </view>
+          </view>
+          <view class="form-row">
+            <text class="form-label">备注说明</text>
+            <van-field value="{{newRule.notes}}" placeholder="选填" border="{{false}}" bind:change="onRuleNotes" />
+          </view>
+          <van-button type="primary" block bind:click="saveRule" loading="{{savingRule}}">保存代金券</van-button>
+        </view>
+      </view>
+
+      <!-- 导出核销记录 - 按月对账 -->
+      <view class="export-section export-card">
+        <view class="export-card-header">
+          <text class="export-title">代金券对账</text>
+        </view>
+        <view class="export-filter-row">
+          <text class="export-label">选择月份</text>
+          <view class="export-picker-wrap">
+            <picker mode="selector" range="{{couponExportMonthLabels}}" value="{{couponExportMonthIndex}}" bindchange="onCouponMonthPick">
+              <view class="picker-inline">
+                <text>{{couponExportMonthLabels[couponExportMonthIndex]}}</text>
+                <text class="picker-arrow">›</text>
+              </view>
+            </picker>
+          </view>
+        </view>
+        <view class="export-stats-row" wx:if="{{couponExportStats.count > 0}}">
+          <text class="export-stat-num">{{couponExportStats.count}}</text>
+          <text class="export-stat-label">笔核销</text>
+          <text class="export-stat-divider">|</text>
+          <text class="export-stat-num">¥{{couponExportStats.amount || 0}}</text>
+          <text class="export-stat-label">核销总额</text>
+        </view>
+        <view class="export-stats-row" wx:else>
+          <text class="export-stat-empty">该月份暂无核销记录</text>
+        </view>
+        <van-button type="primary" block bind:click="downloadCouponReport" loading="{{downloading}}" disabled="{{couponExportStats.count === 0}}">生成对账单文件（CSV）</van-button>
+      </view>
+
+      <!-- 核销记录（按月归集） -->
+      <view class="usage-list">
+        <view class="usage-title">核销明细</view>
+        <view wx:for="{{usageByMonth}}" wx:key="month" class="usage-month-group">
+          <view class="usage-month-header">
+            <text class="usage-month-label">{{item.month}}</text>
+            <text class="usage-month-total">合计 ¥{{item.total}}</text>
+          </view>
+          <view class="usage-item" wx:for="{{item.records}}" wx:key="id" wx:for-item="record">
+            <view class="usage-left">
+              <text class="usage-phone">{{record.phone}}</text>
+              <text class="usage-info">{{record.storeName}} · {{record.usedAtStr}}</text>
+            </view>
+            <view class="usage-right">
+              <text class="usage-amount">¥{{record.amount}}</text>
+              <text class="usage-status">已核销</text>
+            </view>
+          </view>
+        </view>
+        <van-empty wx:if="{{usageByMonth.length === 0}}" description="暂无核销记录" />
+      </view>
+      </view><!-- /tab-panel-content -->
+    </van-tab>
+
+    <!-- ===== 门店管理 ===== -->
+    <van-tab name="store" title="门店" wx:if="{{canManageStoreSetup}}">
+      <view class="tab-panel-content">
+      <!-- 省市筛选栏 -->
+      <view class="store-filter-bar">
+        <van-search
+          value="{{ storeSearchKeyword }}"
+          placeholder="搜索门店名称"
+          shape="round"
+          bind:change="onStoreSearchInput"
+          bind:search="onStoreSearchSubmit"
+          bind:clear="onStoreSearchClear"
+        ></van-search>
+      </view>
+      <!-- 省市区三级筛选 -->
+      <view class="store-area-filter">
+        <!-- 省份筛选（storeProvinces 已包含"全部"） -->
+        <scroll-view scroll-x class="region-filter-row">
+          <view 
+            wx:for="{{storeProvinces}}" 
+            wx:key="*this"
+            class="region-chip {{storeFilterProvince === item ? 'active' : ''}}" 
+            bindtap="setStoreProvinceFilter" 
+            data-val="{{item}}"
+          >{{item}}</view>
+        </scroll-view>
+        
+        <!-- 城市筛选（当省份非全部时显示） -->
+        <scroll-view scroll-x class="region-filter-row" wx:if="{{storeFilterProvince !== '全部'}}">
+          <view 
+            wx:for="{{storeCities}}" 
+            wx:key="*this"
+            class="region-chip {{storeFilterCity === item ? 'active' : ''}}" 
+            bindtap="setStoreCityFilter" 
+            data-val="{{item}}"
+          >{{item}}</view>
+        </scroll-view>
+        
+        <!-- 区县筛选（当城市非全部时显示） -->
+        <scroll-view scroll-x class="region-filter-row" wx:if="{{storeFilterCity !== '全部' && storeFilterCity}}">
+          <view 
+            wx:for="{{storeDistricts}}" 
+            wx:key="*this"
+            class="region-chip {{storeFilterDistrict === item ? 'active' : ''}}" 
+            bindtap="setStoreDistrictFilter" 
+            data-val="{{item}}"
+          >{{item}}</view>
+        </scroll-view>
+      </view>
+
+      <view class="store-count-tip">共 {{filteredStores.length}} 家门店</view>
+      <view class="store-list">
+        <view class="store-swipe-wrap" wx:for="{{filteredStores}}" wx:key="id" data-idx="{{index}}">
+          <!-- 背景操作按钮（左滑后显示） -->
+          <view class="store-swipe-actions">
+            <view class="store-swipe-btn btn-edit-store" bindtap="editStore" data-id="{{item.id}}" data-idx="{{index}}">编辑</view>
+            <view class="store-swipe-btn btn-del-store" bindtap="deleteStore" data-id="{{item.id}}">删除</view>
+          </view>
+          <!-- 前景内容 -->
+          <view class="store-item store-slide-item {{swipeActiveIdx === index ? 'slide-left' : ''}}"
+            catchtouchstart="onSwipeTouchStart" catchtouchmove="onSwipeTouchMove" catchtouchend="onSwipeTouchEnd"
+            data-idx="{{index}}" catchtap="onStoreItemTap">
+            <view class="store-info">
+              <text class="store-name">{{item.name}}</text>
+              <text class="store-addr">{{item.address}}</text>
+              <view class="store-meta-row">
+                <text class="store-meta">负责人：{{item.owner || '—'}}</text>
+                <text class="store-phone-tag" wx:if="{{item.phone}}">店长: {{item.phone}}</text>
+              </view>
+            </view>
+            <view class="store-qrcode" bindtap="showQRCode" data-id="{{item.id}}">
+              <text class="qrcode-text">核销码</text>
+            </view>
+          </view>
+        </view>
+        <van-empty wx:if="{{filteredStores.length === 0}}" description="{{stores.length === 0 ? '暂无门店' : '无匹配门店'}}" />
+      </view>
+
+      <!-- 添加/编辑门店表单 -->
+      <view class="add-store-card">
+        <view class="add-store-title">{{editingStoreId ? '编辑门店' : '+ 添加新门店'}}</view>
+        <view class="store-form-item">
+          <text class="store-form-label">门店名称 <text class="required-mark">*</text></text>
+          <van-field value="{{newStore.name}}" placeholder="请输入门店名称" border="{{false}}" bind:change="onNewStoreName" />
+        </view>
+        <!-- 省市区选择 -->
+        <view class="store-form-item">
+          <text class="store-form-label">所在地区 <text class="required-mark">*</text></text>
+          <picker mode="region" bindchange="onRegionChange" value="{{newStore.regionValue}}" custom-item="全部">
+            <view class="region-picker-field">
+              <text class="region-text">{{newStore.regionText || '请选择省市区'}}</text>
+              <text class="region-select-arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+        
+        <view class="store-form-item">
+          <text class="store-form-label">详细地址</text>
+          <view class="addr-row">
+            <van-field value="{{newStore.address}}" placeholder="街道门牌号等详细地址" border="{{false}}" custom-class="addr-input" bind:change="onNewStoreAddr" />
+            <van-button type="primary" size="small" bind:click="chooseLocation">地图选</van-button>
+          </view>
+        </view>
+        <view class="store-form-item">
+          <text class="store-form-label">负责人 <text class="required-mark">*</text></text>
+          <van-field value="{{newStore.owner}}" placeholder="负责人姓名" border="{{false}}" bind:change="onNewStoreOwner" />
+        </view>
+        <view class="store-form-item">
+          <text class="store-form-label">店长手机号 <text class="required-mark">*</text></text>
+          <van-field 
+            value="{{newStore.phone}}" 
+            placeholder="用于身份识别，该号码登录小程序自动拥有门店权限" 
+            type="number" 
+            maxlength="11"
+            error="{{!!phoneBindError}}"
+            error-message="{{phoneBindError}}"
+            border="{{false}}"
+            bind:change="onNewStorePhone" 
+          />
+          <view class="store-phone-tip" wx:if="{{newStore.phone}}">
+            <text class="tip-icon">ℹ️</text>
+            <text class="tip-text">{{newStore.phone}} 登录后自动关联此门店，可进行核销操作</text>
+          </view>
+        </view>
+        <view class="store-form-btns">
+          <van-button plain type="default" bind:click="cancelEditStore" wx:if="{{editingStoreId}}">取消</van-button>
+          <van-button type="primary" bind:click="addStore" loading="{{savingStore}}">{{editingStoreId ? '保存修改' : '确认添加'}}</van-button>
+        </view>
+      </view>
+      </view><!-- /tab-panel-content -->
+    </van-tab>
+
+    <!-- ===== 管理员管理 ===== -->
+    <van-tab name="admins" title="管理员" wx:if="{{canManageAdmins}}">
+      <view class="tab-panel-content">
+      <!-- 当前管理员身份 -->
+      <view class="current-admin-card">
+        <view class="current-admin-label">当前登录身份</view>
+        <view class="current-admin-info" wx:if="{{currentAdmin}}">
+          <text class="current-admin-name">{{currentAdmin.name}}</text>
+          <text class="current-admin-phone" wx:if="{{currentAdmin.phone}}">{{currentAdmin.phone}}</text>
+          <van-tag type="primary" plain size="medium">{{currentAdmin.roleKey === 'super_admin' ? '超级管理员' : '管理员'}}</van-tag>
+        </view>
+        <view class="current-admin-info guest-info" wx:else>
+          <text class="guest-tip">您当前不是管理员</text>
+          <text class="guest-subtip">当前账号不具备后台管理权限</text>
+        </view>
+      </view>
+
+      <!-- 管理员列表 -->
+      <view class="section-card">
+        <view class="section-header">
+          <text class="section-title">管理员列表</text>
+          <van-tag type="primary" plain size="medium">{{admins.length}} 人</van-tag>
+        </view>
+        <view class="admin-list">
+          <view class="admin-swipe-wrap" wx:for="{{admins}}" wx:key="id" data-idx="{{index}}">
+            <!-- 背景操作按钮（左滑后显示，非当前管理员才显示） -->
+            <view class="admin-swipe-actions" wx:if="{{canEditOtherAdmins && item.id !== currentAdmin.id}}">
+              <view class="admin-swipe-btn btn-edit-admin" bindtap="editAdmin" data-id="{{item.id}}" data-idx="{{index}}">编辑</view>
+              <view class="admin-swipe-btn btn-del-admin" bindtap="deleteAdmin" data-id="{{item.id}}">删除</view>
+            </view>
+            <!-- 前景内容 -->
+            <view class="admin-item admin-slide-item {{adminSwipeActiveIdx === index ? 'slide-left' : ''}}"
+              catchtouchstart="onAdminSwipeTouchStart" catchtouchmove="onAdminSwipeTouchMove" catchtouchend="onAdminSwipeTouchEnd"
+              data-idx="{{index}}" catchtap="onAdminItemTap">
+              <view class="admin-item-left">
+                <text class="admin-item-name">{{item.name}}</text>
+                <text class="admin-item-phone">{{item.phone}}</text>
+              </view>
+              <view class="admin-item-right">
+                <van-tag type="{{item.status === 1 ? 'success' : 'default'}}" plain size="medium">
+                  {{item.status === 1 ? '有效' : '已停用'}}
+                </van-tag>
+                <text class="current-tag" wx:if="{{item.id === currentAdmin.id}}">当前</text>
+              </view>
+            </view>
+          </view>
+          <van-empty wx:if="{{admins.length === 0}}" description="暂无管理员记录" />
+        </view>
+      </view>
+
+      <!-- 添加/编辑管理员表单 -->
+      <view class="add-admin-card">
+        <view class="add-admin-title">{{editingAdminId ? '编辑管理员' : '+ 邀请管理员'}}</view>
+        <view class="store-form-item">
+          <text class="store-form-label">管理员姓名 <text class="required-mark">*</text></text>
+          <van-field value="{{newAdmin.name}}" placeholder="请输入真实姓名" border="{{false}}" bind:change="onNewAdminName" />
+        </view>
+        <view class="store-form-item">
+          <text class="store-form-label">手机号码 <text class="required-mark">*</text></text>
+          <van-field value="{{newAdmin.phone}}" placeholder="管理员手机号（用于云端绑定）" type="number" border="{{false}}" bind:change="onNewAdminPhone" />
+        </view>
+        <view class="add-admin-tip" wx:if="{{!editingAdminId}}">创建邀请后将进入待绑定名单，绑定完成后才能进入后台</view>
+        <view class="admin-form-btns">
+          <van-button plain type="default" bind:click="cancelEditAdmin" wx:if="{{editingAdminId}}">取消</van-button>
+          <van-button type="primary" bind:click="submitAddAdmin" loading="{{savingAdmin}}">
+            {{editingAdminId ? '保存修改' : '创建邀请'}}
+          </van-button>
+        </view>
+      </view>
+      </view><!-- /tab-panel-content -->
+    </van-tab>
+  </van-tabs>
+
+  <!-- 底部导航 -->
+  <view class="admin-footer">
+    <view class="footer-tip">当前为内部管理工作台，仅展示当前身份可用功能</view>
+    <view class="footer-logout" bindtap="logoutAdmin">退出当前身份</view>
+  </view>
+
+  <van-toast id="van-toast" />
+  <van-dialog id="van-dialog" />
+
+  <!-- 省市区选择器弹窗 -->
+  <van-popup show="{{ regionPickerVisible }}" position="bottom" round bind:close="onRegionPickerClose" safe-area-inset-bottom="{{true}}">
+    <view class="region-picker">
+      <view class="picker-header">
+        <text class="picker-title">
+          {{regionPickerType === 'province' ? '选择省份' : regionPickerType === 'city' ? '选择城市' : '选择区县'}}
+        </text>
+        <van-button size="small" plain type="default" bind:click="onRegionPickerClose">取消</van-button>
+      </view>
+      <scroll-view class="picker-list" scroll-y>
+        <view 
+          wx:for="{{regionPickerData}}" 
+          wx:key="*this"
+          class="picker-item {{newStore[regionPickerType] === item ? 'selected' : ''}}"
+          bind:tap="onRegionPickerChange"
+          data-value="{{item}}"
+        >
+          <text>{{item}}</text>
+          <text class="selected-icon" wx:if="{{newStore[regionPickerType] === item}}">✓</text>
+        </view>
+      </scroll-view>
+    </view>
+  </van-popup>
+</view>
