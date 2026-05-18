@@ -623,31 +623,7 @@ App({
    * @returns {Promise<{ latitude: number, longitude: number } | null>}
    */
   getUserLocation() {
-    return new Promise((resolve) => {
-      // 先检查授权状态
-      wx.getSetting({
-        success: (res) => {
-          if (res.authSetting['scope.userLocation'] !== true) {
-            // 未授权，发起授权
-            wx.authorize({
-              scope: 'scope.userLocation',
-              success: () => {
-                this._doGetLocation(resolve);
-              },
-              fail: () => {
-                // 用户拒绝，引导去设置开启
-                this.globalData.locationAuth = false;
-                resolve(null);
-              }
-            });
-          } else {
-            // 已授权，直接获取
-            this._doGetLocation(resolve);
-          }
-        },
-        fail: () => resolve(null)
-      });
-    });
+    return Promise.resolve(null);
   },
 
   /**
@@ -758,16 +734,8 @@ App({
     });
   },
 
-  /**
-   * 打开定位设置页
-   */
-  openLocationSetting() {
-    wx.openSetting({
-      success: (res) => {
-        if (res.authSetting['scope.userLocation']) {
-          this.globalData.locationAuth = true;
-        }
-      }
-    });
-  }
 });
+
+
+
+
