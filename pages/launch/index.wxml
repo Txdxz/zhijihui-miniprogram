@@ -11,19 +11,40 @@
       <text class="status-text">{{statusText}}</text>
     </view>
 
-    <van-button
-      type="primary"
-      round
-      block
-      color="linear-gradient(135deg, #1677FF 0%, #0051D4 100%)"
-      loading="{{authorizing || resolving}}"
-      bind:tap="onWechatLogin"
-    >进入小程序</van-button>
+    <!-- 需要手机号授权绑定角色 -->
+    <block wx:if="{{needsPhoneBind}}">
+      <view class="bind-hint-card">
+        <text class="bind-hint-title">检测到待绑定角色</text>
+        <text class="bind-hint-desc">请授权获取微信手机号，系统将自动为您匹配并绑定相关角色权限</text>
+      </view>
+      <button
+        class="phone-auth-btn"
+        open-type="getPhoneNumber"
+        bindgetphonenumber="onGetPhoneNumber"
+        disabled="{{authorizing}}"
+      >
+        <text wx:if="{{!authorizing}}">授权微信手机号</text>
+        <text wx:else>授权中...</text>
+      </button>
+      <text class="skip-link" bindtap="skipPhoneBind">跳过，以游客身份进入</text>
+    </block>
 
-    <view class="bind-entry">
-      <text class="bind-tip">收到管理员邀请？</text>
-      <text class="bind-link" bindtap="onGoBind">点击绑定角色</text>
-    </view>
+    <!-- 正常登录入口 -->
+    <block wx:else>
+      <van-button
+        type="primary"
+        round
+        block
+        color="linear-gradient(135deg, #1677FF 0%, #0051D4 100%)"
+        loading="{{authorizing || resolving}}"
+        bind:tap="onWechatLogin"
+      >进入小程序</van-button>
+
+      <view class="bind-entry">
+        <text class="bind-tip">收到管理员邀请？</text>
+        <text class="bind-link" bindtap="onGoBind">点击绑定角色</text>
+      </view>
+    </block>
 
     <text class="panel-note">点击后将自动识别您的身份并进入对应页面。</text>
   </view>
@@ -54,4 +75,6 @@
       </view>
     </view>
   </van-popup>
+
+  <van-toast id="van-toast" />
 </view>

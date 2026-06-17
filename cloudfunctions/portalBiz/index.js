@@ -1647,6 +1647,85 @@ async function handleAdminConfirmLogin(OPENID, event) {
   return { code: 200, data: { openId: OPENID } };
 }
 
+/**
+ * 通过微信 getPhoneNumber 获取手机号并自动绑定角色
+ * 调用方式：用户点击 getPhoneNumber 按钮 → 拿到 code → 调此接口
+ */
+async function handleBindPhoneByWechat(OPENID, event) {
+  const code = String(event.code || '').trim();
+  if (!code) {
+    return { code: 400, message: '缺少微信授权 code' };
+  }
+
+  // 1. 解密手机号
+  let phone = '';
+  try {
+    const phoneRes = await cloud.getPhoneNumber({ code });
+    phone = (phoneRes.phoneInfo && phoneRes.phoneInfo.phoneNumber) || '';
+  } catch (e) {
+    console.error('getPhoneNumber error:', e);
+    return { code: 400, message: '获取手机号失败，请重试' };
+  }
+  if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+    return { code: 400, message: '未获取到有效手机号' };
+  }
+
+  const now = new Date().toISOString();
+
+  // 2. 查找该手机号的所有待绑定邀请
+  const inviteRes = await db.collection('staff_invites').where({
+    phone,
+    status: 1,
+    boundOpenId: ''
+  }).get();
+  const invites = inviteRes.data || [];
+  if (!invites.length) {
+    return { code: 404, message: '该手机号暂无待绑定角色' };
+  }
+
+  // 3. 逐一绑定角色
+  const boundRoles = [];
+  for (const invite of invites) {
+    const roleKey = invite.roleKey;
+    // 检查是否已绑定
+    const existing = await db.collection('portal_roles').where({
+      openId: OPENID,
+      roleKey,
+      scopeType: invite.scopeType,
+      scopeId: invite.scopeId,
+      status: 1
+    }).limit(1).get();
+
+    if (!existing.data.length) {
+      await db.collection('portal_roles').add({
+        data: {
+          openId: OPENID,
+          roleKey,
+          name: invite.name || '',
+          phone,
+          scopeType: invite.scopeType,
+          scopeId: invite.scopeId,
+          scopeName: invite.scopeName || '',
+          permissions: invite.permissions || [],
+          status: 1,
+          boundBy: 'wechat_bind',
+          createdAt: now,
+          updatedAt: now
+        }
+      });
+    }
+
+    // 标记邀请已绑定
+    await db.collection('staff_invites').doc(invite._id).update({
+      data: { boundOpenId: OPENID, boundAt: now, updatedAt: now }
+    });
+
+    boundRoles.push({ roleKey, scopeType: invite.scopeType, scopeName: invite.scopeName });
+  }
+
+  return { code: 200, data: { openId: OPENID, phone, roles: boundRoles } };
+}
+
 exports.main = async (event = {}) => {
   const { OPENID: WX_OPENID } = cloud.getWXContext();
   const OPENID = event._bypassOpenId || WX_OPENID;
@@ -1690,6 +1769,7 @@ exports.main = async (event = {}) => {
     if (action === 'getUserInfo') return handleGetUserInfo(OPENID, event);
     if (action === 'exportContracts') return handleExportContracts(OPENID);
     if (action === 'adminConfirmLogin') return handleAdminConfirmLogin(OPENID, event);
+    if (action === 'bindPhoneAndRole') return handleBindPhoneByWechat(OPENID, event);
 
     return { code: 400, message: '不支持的操作类型' };
   } catch (error) {

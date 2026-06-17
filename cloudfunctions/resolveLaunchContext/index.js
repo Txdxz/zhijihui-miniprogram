@@ -130,9 +130,11 @@ exports.main = async (event = {}) => {
     if (pendingInvite) {
       // 尝试自动绑定：用户手机号匹配邀请手机号时自动创建角色
       let autoBound = false;
+      let userHasPhone = false;
       try {
         const userRes = await db.collection('portal_users').where({ openId: OPENID }).limit(1).get();
         const user = userRes.data && userRes.data[0];
+        userHasPhone = !!(user && user.phone);
         if (user && user.phone && user.phone === pendingInvite.phone) {
           const existing = await db.collection('portal_roles').where({
             openId: OPENID,
@@ -171,7 +173,7 @@ exports.main = async (event = {}) => {
       }
 
       if (autoBound) {
-        // 重新查询角色并进入正常分流
+        // 自动绑定成功 → 正常分流
         const newRoleRes = await db.collection('portal_roles').where({
           openId: OPENID,
           status: 1
@@ -217,6 +219,7 @@ exports.main = async (event = {}) => {
           target: buildBindTarget(pendingInvite.roleKey),
           roleOptions: [],
           needsChoice: false,
+          needsPhoneBind: !userHasPhone,
           pendingInvite: {
             roleKey: pendingInvite.roleKey,
             name: pendingInvite.name || ''

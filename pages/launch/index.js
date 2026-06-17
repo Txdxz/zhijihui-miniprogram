@@ -7,7 +7,8 @@ Page({
     resolving: false,
     statusText: '',
     showRoleChooser: false,
-    roleOptions: []
+    roleOptions: [],
+    needsPhoneBind: false
   },
 
   async onLoad() {
@@ -28,17 +29,10 @@ Page({
   },
 
   async onWechatLogin() {
-    if (this.data.authorizing || this.data.resolving) {
-      return;
-    }
-
-    this.setData({
-      authorizing: true,
-      statusText: '正在识别身份...'
-    });
+    if (this.data.authorizing || this.data.resolving) return;
+    this.setData({ authorizing: true, statusText: '正在识别身份...' });
 
     try {
-      // 确保有 openId
       if (!app.globalData.currentOpenId) {
         await new Promise((resolve, reject) => {
           app.wxLogin(
@@ -47,7 +41,6 @@ Page({
           );
         });
       }
-
       await this._resolveAndRoute();
     } catch (error) {
       console.error('onWechatLogin 错误:', error);
@@ -67,6 +60,15 @@ Page({
       this.setData({
         hasSession: !!result.openId
       });
+
+      // 需要手机号授权绑定角色
+      if (result.needsPhoneBind) {
+        this.setData({
+          needsPhoneBind: true,
+          statusText: '请授权微信手机号以完成绑定'
+        });
+        return;
+      }
 
       if (result.needsChoice) {
         this.setData({
@@ -98,39 +100,78 @@ Page({
     }
   },
 
-  _enterTarget(target) {
-    if (!target || !target.url) {
+  /**
+   * 微信手机号授权回调
+   */
+  async onGetPhoneNumber(e) {
+    const detail = e.detail || {};
+    if (detail.errMsg && detail.errMsg !== 'getPhoneNumber:ok') {
+      wx.showToast({ title: '授权失败，可稍后重试', icon: 'none' });
       return;
     }
 
+    const code = detail.code || '';
+    if (!code) {
+      wx.showToast({ title: '获取手机号失败，请重试', icon: 'none' });
+      return;
+    }
+
+    this.setData({ authorizing: true, statusText: '正在绑定角色...' });
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'portalBiz',
+        data: { action: 'bindPhoneAndRole', code }
+      });
+
+      const result = res.result || {};
+      if (result.code === 200) {
+        wx.showToast({ title: '绑定成功', icon: 'success' });
+        // 重新解析角色并路由
+        await this._resolveAndRoute();
+      } else {
+        wx.showToast({ title: result.message || '绑定失败', icon: 'none' });
+        this.setData({ authorizing: false, statusText: result.message || '绑定失败' });
+      }
+    } catch (e) {
+      console.error('bindPhoneAndRole error:', e);
+      wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+      this.setData({ authorizing: false, statusText: '绑定失败' });
+    }
+  },
+
+  /**
+   * 跳过手机号绑定，以游客身份进入
+   */
+  skipPhoneBind() {
+    this.setData({ needsPhoneBind: false, statusText: '以游客身份进入' });
+    // 直接返回 customer 路由
+    this._enterTarget({
+      key: 'customer',
+      title: '客户首页',
+      url: '/pages/index/index',
+      routeType: 'switchTab'
+    });
+  },
+
+  _enterTarget(target) {
+    if (!target || !target.url) return;
     if (target.routeType === 'switchTab') {
       wx.switchTab({ url: target.url });
       return;
     }
-
     wx.reLaunch({ url: target.url });
   },
 
   async onChooseRole(e) {
     const role = e.currentTarget.dataset.role;
     const fallbackTarget = role === 'customer'
-      ? {
-          key: 'customer',
-          title: '客户首页',
-          url: '/pages/index/index',
-          routeType: 'switchTab'
-        }
+      ? { key: 'customer', title: '客户首页', url: '/pages/index/index', routeType: 'switchTab' }
       : (this.data.roleOptions || []).find(item => item.key === role);
 
-    if (!fallbackTarget) {
-      return;
-    }
+    if (!fallbackTarget) return;
 
-    this.setData({
-      resolving: true,
-      showRoleChooser: false,
-      statusText: `正在进入${fallbackTarget.title}...`
-    });
+    this.setData({ resolving: true, showRoleChooser: false, statusText: `正在进入${fallbackTarget.title}...` });
 
     try {
       const res = await app.selectPortalRole(role);
@@ -138,18 +179,12 @@ Page({
         this._enterTarget(res.data);
       } else {
         wx.showToast({ title: res.message || '角色切换失败', icon: 'none' });
-        this.setData({
-          showRoleChooser: true,
-          statusText: res.message || '角色切换失败，请重试'
-        });
+        this.setData({ showRoleChooser: true, statusText: res.message || '角色切换失败，请重试' });
       }
     } catch (error) {
       console.error('onChooseRole 错误:', error);
       wx.showToast({ title: '角色切换失败', icon: 'none' });
-      this.setData({
-        showRoleChooser: true,
-        statusText: '角色切换失败，请重试'
-      });
+      this.setData({ showRoleChooser: true, statusText: '角色切换失败，请重试' });
     } finally {
       this.setData({ resolving: false });
     }
