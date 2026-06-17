@@ -22,37 +22,96 @@ const _ = db.command;
 
 // 初始化数据
 const INIT_DATA = {
-  // 测试门店
+  // 中国移动权益指定门店
   stores: [
     {
       storeId: 'store_001',
-      name: '多尼斯宠物店（体育路店）',
-      address: '山西省太原市小店区体育路88号',
-      province: '山西省',
-      city: '太原市',
-      district: '小店区',
-      phone: '0351-1234567',
+      name: '猫庄宠物用品超市(众创大厦店)',
+      address: '河北省石家庄市（众创大厦店）',
+      province: '河北省',
+      city: '石家庄市',
+      district: '',
+      phone: '',
       status: 1,
-      location: {
-        lat: 37.7968,
-        lng: 112.5602
-      },
+      location: { lat: 0, lng: 0 },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },
     {
       storeId: 'store_002',
-      name: '多尼斯宠物店（迎泽大街店）',
-      address: '山西省太原市迎泽区迎泽大街128号',
-      province: '山西省',
-      city: '太原市',
-      district: '迎泽区',
-      phone: '0351-7654321',
+      name: '裕华小甄宠物用品店',
+      address: '河北省石家庄市裕华区',
+      province: '河北省',
+      city: '石家庄市',
+      district: '裕华区',
+      phone: '',
       status: 1,
-      location: {
-        lat: 37.8625,
-        lng: 112.5675
-      },
+      location: { lat: 0, lng: 0 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      storeId: 'store_003',
+      name: '猫庄·宠物生活馆',
+      address: '河北省石家庄市',
+      province: '河北省',
+      city: '石家庄市',
+      district: '',
+      phone: '',
+      status: 1,
+      location: { lat: 0, lng: 0 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      storeId: 'store_004',
+      name: '小鹿宠物(盛邦花园六区店)',
+      address: '河北省石家庄市盛邦花园六区',
+      province: '河北省',
+      city: '石家庄市',
+      district: '',
+      phone: '',
+      status: 1,
+      location: { lat: 0, lng: 0 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      storeId: 'store_005',
+      name: '有猫腻宠物生活馆',
+      address: '河北省石家庄市',
+      province: '河北省',
+      city: '石家庄市',
+      district: '',
+      phone: '',
+      status: 1,
+      location: { lat: 0, lng: 0 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      storeId: 'store_006',
+      name: '芊宠萌宠物服务',
+      address: '河北省石家庄市',
+      province: '河北省',
+      city: '石家庄市',
+      district: '',
+      phone: '',
+      status: 1,
+      location: { lat: 0, lng: 0 },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
+      storeId: 'store_007',
+      name: '安淇宠物医院（秦皇岛店）',
+      address: '河北省秦皇岛市',
+      province: '河北省',
+      city: '秦皇岛市',
+      district: '',
+      phone: '',
+      status: 1,
+      location: { lat: 0, lng: 0 },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }

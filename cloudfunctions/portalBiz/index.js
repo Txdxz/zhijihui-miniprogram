@@ -385,47 +385,39 @@ async function ensureCouponsForContract(contract = {}) {
 
   // 如果没有匹配的规则，使用默认值
   const amount = rule ? (rule.amount || 20) : 20;
-  const totalCount = rule ? (rule.totalCount || 5) : 5;
-  const validMonths = rule ? (rule.validMonths || 5) : 5;  // 代金券有效月数
-  const monthlyLimit = rule ? (rule.monthlyLimit || 1) : 1;
   const ruleId = rule ? (rule.id || rule._id || '') : '';
 
   const activateDate = nowISO();
-  const tasks = [];
 
-  // 创建 validMonths 张代金券，每张对应一个月
-  for (let i = 0; i < validMonths; i += 1) {
-    // 计算该券对应的月份
-    const periodMonth = new Date(activateDate);
-    periodMonth.setMonth(periodMonth.getMonth() + i);
-    const periodMonthStr = `${periodMonth.getFullYear()}-${String(periodMonth.getMonth() + 1).padStart(2, '0')}`;
+  // 中国移动权益规则：单张代金券，自领取当日计算 30 天内有效
+  const expireAt = new Date(activateDate);
+  expireAt.setDate(expireAt.getDate() + 30);
 
-    tasks.push(coupons.add({
-      data: {
-        couponId: genId('CP'),
-        contractId,
-        openId: contract.openId,
-        storeId: contract.storeId,
-        storeName: contract.storeName || '',
-        amount,
-        monthlyLimit,
-        ruleId,
-        period: i + 1, // 第几期（从 1 开始）
-        periodMonth: periodMonthStr, // 对应的月份，格式 "2026-04"
-        status: 0,  // 待激活，由移动回调激活
-        activateDate,
-        usedCount: 0,
-        usedTimes: 0, // 本月已使用次数
-        verifyCode: '',
-        verifyExpireAt: 0,
-        usedAt: '',
-        createdAt: activateDate,
-        updatedAt: activateDate
-      }
-    }));
-  }
-
-  await Promise.all(tasks);
+  await coupons.add({
+    data: {
+      couponId: genId('CP'),
+      contractId,
+      openId: contract.openId,
+      phone: contract.phone || '',
+      storeId: contract.storeId,
+      storeName: contract.storeName || '',
+      amount,
+      ruleId,
+      status: 0,  // 待激活：用户在移动平台领取权益后由回调激活
+      activateDate,         // 权益激活时间（移动回调时更新）
+      expireAt: expireAt.toISOString(),  // 过期时间：激活后30天
+      usedCount: 0,
+      verifyCode: '',
+      verifyExpireAt: 0,
+      usedAt: '',
+      // 移动权益对接字段
+      mobileBenefitId: '',  // 移动权益ID（移动回调时填充）
+      mobileOrderId: '',    // 移动订单ID（移动回调时填充）
+      mobileNotifiedAt: '', // 核销状态回传移动时间
+      createdAt: activateDate,
+      updatedAt: activateDate
+    }
+  });
 }
 
 async function handleUpdateUserProfile(openId, event = {}) {
@@ -730,24 +722,12 @@ async function handleGenerateVerifyCode(openId, event = {}) {
   if (!coupon) return { code: 404, message: '代金券不存在' };
   if (Number(coupon.status) !== 1) return { code: 400, message: '该券不可使用' };
 
-  // 检查月份是否匹配
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  if (coupon.periodMonth && coupon.periodMonth !== currentMonth) {
-    return { 
-      code: 400, 
-      message: `该券仅限${coupon.periodMonth}使用，当前月份为${currentMonth}` 
-    };
-  }
-
-  // 检查本月已使用次数
-  const monthlyLimit = Number(coupon.monthlyLimit || 1);
-  const usedTimes = Number(coupon.usedTimes || 0);
-  if (usedTimes >= monthlyLimit) {
-    return { 
-      code: 400, 
-      message: `本月已使用${usedTimes}次，已达上限（${monthlyLimit}次/月）` 
-    };
+  // 检查是否过期
+  if (coupon.expireAt && new Date(coupon.expireAt) < new Date()) {
+    await db.collection('coupons').doc(coupon._id).update({
+      data: { status: 3, updatedAt: nowISO() }
+    });
+    return { code: 400, message: '该券已过期' };
   }
 
   const verifyCode = String(Math.floor(100000 + Math.random() * 900000));
@@ -814,37 +794,82 @@ async function handleStoreConfirmVerify(openId, event = {}) {
     return { code: 400, message: '该券不可核销' };
   }
 
-  // 更新使用次数
-  const usedTimes = Number(coupon.usedTimes || 0) + 1;
-  const monthlyLimit = Number(coupon.monthlyLimit || 1);
-  const usedCount = Number(coupon.usedCount || 0) + 1;
+  // 检查是否过期
+  if (coupon.expireAt && new Date(coupon.expireAt) < new Date()) {
+    await db.collection('coupons').doc(coupon._id).update({
+      data: { status: 3, updatedAt: nowISO() }
+    });
+    return { code: 400, message: '该券已过期' };
+  }
 
-  // 判断是否达到本月上限
-  const shouldDeactivate = usedTimes >= monthlyLimit;
-
+  const now = nowISO();
   await db.collection('coupons').doc(coupon._id).update({
     data: {
-      status: shouldDeactivate ? 2 : 1, // 达到上限才标记为已使用
-      usedTimes, // 本月使用次数
-      usedCount, // 总使用次数
-      usedAt: nowISO(),
+      status: 2,
+      usedCount: Number(coupon.usedCount || 0) + 1,
+      usedAt: now,
       verifyCode: '',
       verifyExpireAt: 0,
-      updatedAt: nowISO()
+      updatedAt: now
     }
   });
 
   const updatedRes = await db.collection('coupons').where({ couponId }).limit(1).get();
   const updated = updatedRes.data && updatedRes.data[0];
 
+  // 核销状态回传中国移动（异步，不阻塞核销结果返回）
+  if (updated.mobileBenefitId) {
+    notifyMobileVerifyStatus(updated).catch(err => {
+      console.error('回传移动核销状态失败:', err);
+    });
+  }
+
   return {
     code: 200,
-    data: {
-      ...normalizeCoupon(updated),
-      usedTimes,
-      monthlyLimit
-    }
+    data: normalizeCoupon(updated)
   };
+}
+
+/**
+ * 核销状态回传中国移动
+ * TODO: 待移动提供正式接口地址和鉴权方式后补充实现
+ */
+async function notifyMobileVerifyStatus(coupon) {
+  // 移动接口地址和鉴权方式待确认，当前仅记录日志
+  console.log('待回传移动核销状态:', {
+    mobileBenefitId: coupon.mobileBenefitId,
+    mobileOrderId: coupon.mobileOrderId,
+    couponId: coupon.couponId,
+    usedAt: coupon.usedAt,
+    storeId: coupon.storeId
+  });
+
+  // TODO: 移动提供接口后，在此处实现 HTTP 请求回传核销状态
+  // 示例：
+  // const https = require('https');
+  // await new Promise((resolve, reject) => {
+  //   const body = JSON.stringify({
+  //     benefitId: coupon.mobileBenefitId,
+  //     orderId: coupon.mobileOrderId,
+  //     status: 'used',
+  //     usedAt: coupon.usedAt,
+  //     storeId: coupon.storeId
+  //   });
+  //   const req = https.request({
+  //     hostname: 'mobile-api-host',
+  //     path: '/benefit/verify-callback',
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+  //   }, (res) => { res.on('data', () => {}); res.on('end', resolve); });
+  //   req.on('error', reject);
+  //   req.write(body);
+  //   req.end();
+  // });
+
+  // 记录回传时间
+  await db.collection('coupons').doc(coupon._id).update({
+    data: { mobileNotifiedAt: nowISO() }
+  });
 }
 
 async function handleGetStoreVerifyRecords(openId, event = {}) {
@@ -1555,28 +1580,31 @@ async function handleExportContracts(openId) {
 }
 
 /**
- * 移动回调：激活指定合约期数的代金券（status: 0 → 1）
- * 由河北移动系统在处理合约完成后回调
+ * 移动回调：用户在移动平台领取权益后激活代金券
+ * 由中国移动权益优选小程序在用户领取后回调
+ * @param {string} contractId - 合约ID
+ * @param {string} mobileBenefitId - 移动权益ID
+ * @param {string} mobileOrderId - 移动订单ID
+ * @param {string} authToken - 接口鉴权令牌
  */
 async function handleActivateCoupon(openId, event = {}) {
-  const { contractId, period, authToken } = event;
+  const { contractId, mobileBenefitId, mobileOrderId, authToken } = event;
 
-  // Simple auth check (placeholder — enhance for production)
+  // 接口鉴权（移动对接时替换为正式令牌）
   if (!authToken || authToken !== 'zjh_callback_2024') {
     return { code: 403, message: 'unauthorized' };
   }
 
-  if (!contractId || !period) {
-    return { code: 400, message: '缺少参数 contractId 或 period' };
+  if (!contractId) {
+    return { code: 400, message: '缺少参数 contractId' };
   }
 
-  const now = Date.now();
+  const now = nowISO();
   const couponsCollection = db.collection('coupons');
 
-  // Find coupons for this contract + period with status=0
+  // 查找该合约下待激活的券
   const res = await couponsCollection.where({
     contractId,
-    period: Number(period),
     status: 0
   }).get();
 
@@ -1584,12 +1612,19 @@ async function handleActivateCoupon(openId, event = {}) {
     return { code: 404, message: '未找到待激活的券或已激活' };
   }
 
-  // Activate all matching coupons
+  // 激活券：状态 0→1，记录移动权益信息，重新计算30天有效期
+  const activateDate = now;
+  const expireAt = new Date(activateDate);
+  expireAt.setDate(expireAt.getDate() + 30);
+
   const updatePromises = res.data.map(c => {
     return couponsCollection.doc(c._id).update({
       data: {
         status: 1,
-        activateDate: now,
+        activateDate,
+        expireAt: expireAt.toISOString(),
+        mobileBenefitId: mobileBenefitId || '',
+        mobileOrderId: mobileOrderId || '',
         updatedAt: now
       }
     });
@@ -1602,8 +1637,8 @@ async function handleActivateCoupon(openId, event = {}) {
     message: 'ok',
     data: {
       activatedCount: res.data.length,
-      period: Number(period),
-      contractId
+      contractId,
+      expireAt: expireAt.toISOString()
     }
   };
 }

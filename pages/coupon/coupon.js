@@ -135,48 +135,15 @@ Page({
       const res = await businessAPI.getCoupons(contractId);
 
       if (res.code === 200 && res.data && res.data.length > 0) {
-        // 获取当前月份
-        const now = new Date();
-        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        
-        // 按 period 升序排序
-        const sortedData = [...res.data].sort((a, b) => {
-          const periodA = a.period || 0;
-          const periodB = b.period || 0;
-          return periodA - periodB;
-        });
-        
-        const coupons = sortedData.map(c => {
-          // 判断是否在当前使用期内
-          const isInCurrentMonth = c.periodMonth === currentMonth;
-          // 如果状态是"可使用"但月份不匹配，标记为"非当月"
-          const isNotCurrentMonth = c.status === 1 && !isInCurrentMonth;
-
-          // 计算剩余可用次数
-          const usedTimes = c.usedTimes || 0;
-          const monthlyLimit = c.monthlyLimit || 1;
-          const remainingTimes = Math.max(0, monthlyLimit - usedTimes);
-
-          // 判断本月是否已用完（status=1 但达到月上限，应该是 status=2）
-          const isMonthlyUsedUp = c.status === 2 || (c.status === 1 && remainingTimes === 0 && isInCurrentMonth);
-
+        const coupons = res.data.map(c => {
+          const isExpired = c.expireAt && new Date(c.expireAt) < new Date();
           return {
             ...c,
-            statusClass: this._getStatusClass(c.status, isNotCurrentMonth, isMonthlyUsedUp),
+            statusClass: this._getStatusClass(c.status, isExpired),
             activateDate: this._formatDate(c.activateDate).split(' ')[0],
+            expireDate: c.expireAt ? this._formatDate(c.expireAt).split(' ')[0] : '',
             usedAt: c.usedAt ? this._formatDate(c.usedAt) : '',
-            // 格式化金额
-            amountText: c.amount ? `¥${c.amount}` : '¥20',
-            // 每月可用金额
-            monthlyAmountText: c.monthlyAmount ? `¥${c.monthlyAmount}/月` : '¥20/月',
-            // 是否在当月使用期内
-            isInCurrentMonth,
-            isNotCurrentMonth,
-            // 使用次数相关
-            usedTimes,
-            monthlyLimit,
-            remainingTimes,
-            isMonthlyUsedUp
+            amountText: c.amount ? `¥${c.amount}` : '¥20'
           };
         });
 
@@ -184,7 +151,7 @@ Page({
           hasContract: true,
           coupons,
           totalCount: coupons.length,
-          availableCount: coupons.filter(c => c.status === 1 && c.isInCurrentMonth).length,
+          availableCount: coupons.filter(c => c.status === 1).length,
           usedCount: coupons.filter(c => c.status === 2).length
         });
       } else {
@@ -208,13 +175,9 @@ Page({
     }
   },
 
-  _getStatusClass(status, isNotCurrentMonth = false, isMonthlyUsedUp = false) {
+  _getStatusClass(status, isExpired = false) {
     if (status === 0) return 'pending';
-    if (status === 1) {
-      if (isNotCurrentMonth) return 'not-current-month';
-      if (isMonthlyUsedUp) return 'monthly-used-up';
-      return 'available';
-    }
+    if (status === 1) return 'available';
     if (status === 2) return 'used';
     if (status === 3) return 'expired';
     return 'pending';
@@ -251,12 +214,6 @@ Page({
 
     if (!coupon || coupon.status !== 1) {
       this._showToast('该券不可使用');
-      return;
-    }
-
-    // 判断是否在当前使用期内
-    if (coupon.isNotCurrentMonth) {
-      this._showToast(`该券仅限 ${coupon.periodMonth} 使用`);
       return;
     }
 

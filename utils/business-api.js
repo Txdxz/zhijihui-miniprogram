@@ -104,8 +104,8 @@ const businessAPI = {
     return _callPortalBiz('getCoupons', { contractId });
   },
 
-  activateCoupon(contractId, period, authToken) {
-    return _callPortalBiz('activateCoupon', { contractId, period, authToken });
+  activateCoupon(contractId, mobileBenefitId, mobileOrderId, authToken) {
+    return _callPortalBiz('activateCoupon', { contractId, mobileBenefitId, mobileOrderId, authToken });
   },
 
   generateVerifyCode(couponId) {
