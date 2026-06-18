@@ -192,7 +192,6 @@ exports.main = async (event, context) => {
       'coupons',
       'staff_invites',
       'coupon_rules',
-      'admin_subscriptions',
       'sms_verifications',
       'rate_limits'
     ];

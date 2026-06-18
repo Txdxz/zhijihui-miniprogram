@@ -199,7 +199,7 @@ function sanitizeForLog(text, type = 'default') {
 }
 
 /**
- * 发送订阅消息通知管理员
+ * 发送企业微信通知管理员
  * @param {string} action - 通知类型：notifyVerifyPending / notifySmsCodePending / notifyNewSmsCode
  * @param {object} data - 通知数据
  */
