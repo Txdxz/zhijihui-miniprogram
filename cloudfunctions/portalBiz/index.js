@@ -420,6 +420,26 @@ async function ensureCouponsForContract(contract = {}) {
   });
 }
 
+/**
+ * 自动注册：合约办理完成后，将客户手机号绑定到 openId
+ * 用户办理合约时提交的验证码已被中国移动验证通过，手机号真实性有保障
+ * 绑定后用户下次使用同一微信登录即可直接查看权益状态
+ */
+async function bindPhoneToUser(openId, phone) {
+  if (!openId || !phone) return;
+  try {
+    const users = db.collection('portal_users');
+    const existing = await users.where({ openId }).limit(1).get();
+    if (existing.data && existing.data.length) {
+      await users.doc(existing.data[0]._id).update({
+        data: { phone, updatedAt: nowISO() }
+      });
+    }
+  } catch (error) {
+    console.error('自动注册绑定手机号失败:', error);
+  }
+}
+
 async function handleUpdateUserProfile(openId, event = {}) {
   const nickName = String(event.nickName || '').trim();
   const avatarUrl = String(event.avatarUrl || '').trim();
@@ -995,6 +1015,8 @@ async function handleAdminUpdateStatus(openId, event = {}) {
   await db.collection('contracts').doc(contract._id).update({ data: nextData });
   if (status === STATES.CONTRACT_OK) {
     await ensureCouponsForContract({ ...contract, ...nextData });
+    // 自动注册：将客户手机号绑定到 openId，完成用户注册
+    await bindPhoneToUser(contract.openId, contract.phone);
   }
 
   const updatedRes = await db.collection('contracts').where({ contractId }).limit(1).get();
