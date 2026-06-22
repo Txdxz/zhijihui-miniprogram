@@ -302,6 +302,9 @@ exports.main = async (event, context) => {
 
       // 为 coupons 集合添加索引
       await db.collection('coupons').createIndex({
+        phone: 1
+      });
+      await db.collection('coupons').createIndex({
         contractId: 1
       });
       await db.collection('coupons').createIndex({

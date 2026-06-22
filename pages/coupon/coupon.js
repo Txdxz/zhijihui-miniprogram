@@ -113,26 +113,7 @@ Page({
 
   async loadCoupons() {
     try {
-      const contractId = await businessAPI.getCurrentContractId();
-
-      if (!contractId) {
-        this._stopCountdown();
-        this.setData({
-          hasContract: false,
-          coupons: [],
-          totalCount: 0,
-          availableCount: 0,
-          usedCount: 0,
-          showModal: false,
-          verifyCode: '',
-          qrCodeData: '',
-          verifyExpireAt: 0,
-          currentCoupon: null
-        });
-        return;
-      }
-
-      const res = await businessAPI.getCoupons(contractId);
+      const res = await businessAPI.getCoupons();
 
       if (res.code === 200 && res.data && res.data.length > 0) {
         const coupons = res.data.map(c => {
@@ -176,11 +157,10 @@ Page({
   },
 
   _getStatusClass(status, isExpired = false) {
-    if (status === 0) return 'pending';
     if (status === 1) return 'available';
     if (status === 2) return 'used';
     if (status === 3) return 'expired';
-    return 'pending';
+    return 'available';
   },
 
   _formatDate(dateStr) {

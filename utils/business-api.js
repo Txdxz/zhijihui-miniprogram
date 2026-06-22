@@ -100,12 +100,12 @@ const businessAPI = {
     return _callPortalBiz('adminUpdateStatus', { contractId, status, extra });
   },
 
-  getCoupons(contractId) {
-    return _callPortalBiz('getCoupons', { contractId });
+  getCoupons() {
+    return _callPortalBiz('getCoupons', {});
   },
 
-  activateCoupon(contractId, mobileBenefitId, mobileOrderId, authToken) {
-    return _callPortalBiz('activateCoupon', { contractId, mobileBenefitId, mobileOrderId, authToken });
+  activateCoupon(phone, mobileBenefitId, mobileOrderId, authToken) {
+    return _callPortalBiz('activateCoupon', { phone, mobileBenefitId, mobileOrderId, authToken });
   },
 
   generateVerifyCode(couponId) {

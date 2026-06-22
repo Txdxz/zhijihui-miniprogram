@@ -348,78 +348,6 @@ async function getCurrentContractId(openId) {
   return contract ? String(contract.contractId || contract.id || '') : '';
 }
 
-async function ensureCouponsForContract(contract = {}) {
-  const contractId = contract.contractId || contract.id;
-  if (!contractId) return;
-
-  const coupons = db.collection('coupons');
-  const exists = await coupons.where({ contractId }).count();
-  if (exists.total > 0) {
-    return;
-  }
-
-  const storeId = contract.storeId || '';
-
-  // 查询匹配的代金券规则
-  let rule = null;
-  try {
-    const rulesRes = await db.collection('coupon_rules').where({
-      status: 1
-    }).get();
-
-    const rules = rulesRes.data || [];
-    // 查找匹配该门店的规则
-    for (const r of rules) {
-      if (r.storeScope === 'all') {
-        rule = r;
-        break;
-      }
-      if (r.storeScope === 'bound' && r.selectedStores && r.selectedStores.includes(storeId)) {
-        rule = r;
-        break;
-      }
-    }
-  } catch (e) {
-    console.error('查询代金券规则失败:', e);
-  }
-
-  // 如果没有匹配的规则，使用默认值
-  const amount = rule ? (rule.amount || 20) : 20;
-  const ruleId = rule ? (rule.id || rule._id || '') : '';
-
-  const activateDate = nowISO();
-
-  // 中国移动权益规则：单张代金券，自领取当日计算 30 天内有效
-  const expireAt = new Date(activateDate);
-  expireAt.setDate(expireAt.getDate() + 30);
-
-  await coupons.add({
-    data: {
-      couponId: genId('CP'),
-      contractId,
-      openId: contract.openId,
-      phone: contract.phone || '',
-      storeId: contract.storeId,
-      storeName: contract.storeName || '',
-      amount,
-      ruleId,
-      status: 0,  // 待激活：用户在移动平台领取权益后由回调激活
-      activateDate,         // 权益激活时间（移动回调时更新）
-      expireAt: expireAt.toISOString(),  // 过期时间：激活后30天
-      usedCount: 0,
-      verifyCode: '',
-      verifyExpireAt: 0,
-      usedAt: '',
-      // 移动权益对接字段
-      mobileBenefitId: '',  // 移动权益ID（移动回调时填充）
-      mobileOrderId: '',    // 移动订单ID（移动回调时填充）
-      mobileNotifiedAt: '', // 核销状态回传移动时间
-      createdAt: activateDate,
-      updatedAt: activateDate
-    }
-  });
-}
-
 /**
  * 自动注册：合约办理完成后，将客户手机号绑定到 openId
  * 用户办理合约时提交的验证码已被中国移动验证通过，手机号真实性有保障
@@ -718,18 +646,26 @@ async function handleSubmitSmsCode(openId, event = {}) {
 }
 
 async function handleGetCoupons(openId, event = {}) {
-  const contractId = String(event.contractId || '').trim();
-  if (!contractId) {
-    return { code: 200, data: [] };
+  // 按手机号查询代金券（用户可能多设备/多微信登录，以手机号为主键）
+  const userRes = await db.collection('portal_users').where({ openId }).limit(1).get();
+  const phone = (userRes.data && userRes.data[0] && userRes.data[0].phone) || '';
+
+  let query = {};
+  if (phone) {
+    query = { phone };
+  } else {
+    query = { openId };
   }
-  const contractRes = await db.collection('contracts').where({
-    contractId,
-    openId
-  }).limit(1).get();
-  if (!(contractRes.data && contractRes.data.length)) {
-    return { code: 404, message: '合约记录不存在' };
+
+  const res = await db.collection('coupons').where(query).orderBy('createdAt', 'desc').get();
+
+  // 懒触发自动结算：查询时检查是否到了结算时间
+  for (const c of res.data) {
+    if (c.status === 1 && !c.settleType && c.settleAt && new Date(c.settleAt) <= new Date()) {
+      tryAutoSettle(c);
+    }
   }
-  const res = await db.collection('coupons').where({ contractId }).get();
+
   return { code: 200, data: (res.data || []).map(normalizeCoupon) };
 }
 
@@ -737,9 +673,17 @@ async function handleGenerateVerifyCode(openId, event = {}) {
   const couponId = String(event.couponId || '').trim();
   if (!couponId) return { code: 400, message: '缺少代金券标识' };
 
-  const couponRes = await db.collection('coupons').where({ couponId, openId }).limit(1).get();
+  const couponRes = await db.collection('coupons').where({ couponId }).limit(1).get();
   const coupon = couponRes.data && couponRes.data[0];
   if (!coupon) return { code: 404, message: '代金券不存在' };
+
+  // 权限校验：用户必须绑定与该券相同的手机号
+  const userRes = await db.collection('portal_users').where({ openId }).limit(1).get();
+  const userPhone = (userRes.data && userRes.data[0] && userRes.data[0].phone) || '';
+  if (coupon.phone && userPhone !== coupon.phone) {
+    return { code: 403, message: '无权操作该代金券' };
+  }
+
   if (Number(coupon.status) !== 1) return { code: 400, message: '该券不可使用' };
 
   // 检查是否过期
@@ -748,6 +692,11 @@ async function handleGenerateVerifyCode(openId, event = {}) {
       data: { status: 3, updatedAt: nowISO() }
     });
     return { code: 400, message: '该券已过期' };
+  }
+
+  // 懒触发自动结算检查
+  if (!coupon.settleType && coupon.settleAt && new Date(coupon.settleAt) <= new Date()) {
+    tryAutoSettle(coupon);
   }
 
   const verifyCode = String(Math.floor(100000 + Math.random() * 900000));
@@ -830,6 +779,8 @@ async function handleStoreConfirmVerify(openId, event = {}) {
       usedAt: now,
       verifyCode: '',
       verifyExpireAt: 0,
+      settleType: 'manual',  // 用户主动核销
+      settleAt: now,
       updatedAt: now
     }
   });
@@ -839,8 +790,8 @@ async function handleStoreConfirmVerify(openId, event = {}) {
 
   // 核销状态回传中国移动（异步，不阻塞核销结果返回）
   if (updated.mobileBenefitId) {
-    notifyMobileVerifyStatus(updated).catch(err => {
-      console.error('回传移动核销状态失败:', err);
+    notifyMobileSettle(updated, 'manual').catch(err => {
+      console.error('手动核销回传移动失败:', err);
     });
   }
 
@@ -854,39 +805,55 @@ async function handleStoreConfirmVerify(openId, event = {}) {
  * 核销状态回传中国移动
  * TODO: 待移动提供正式接口地址和鉴权方式后补充实现
  */
-async function notifyMobileVerifyStatus(coupon) {
-  // 移动接口地址和鉴权方式待确认，当前仅记录日志
-  console.log('待回传移动核销状态:', {
+/**
+ * 懒触发自动结算：在查询券或生成核销码时检查是否到了结算时间
+ * 到了结算时间且尚未结算 → 自动向移动回传"已核销"状态
+ * 结算后券仍可正常使用，settleType='auto' 记录为自动结算
+ */
+async function tryAutoSettle(coupon) {
+  if (!coupon || !coupon._id) return;
+  if (coupon.settleType) return; // 已结算，跳过
+
+  const now = nowISO();
+  await db.collection('coupons').doc(coupon._id).update({
+    data: {
+      settleType: 'auto',
+      settleAt: now,
+      updatedAt: now
+    }
+  });
+
+  // 异步回传移动（不阻塞主流程）
+  notifyMobileSettle(coupon, 'auto').catch(err => {
+    console.error('自动结算回传移动失败:', err);
+  });
+}
+
+/**
+ * 回传结算状态给中国移动
+ * @param {string} settleType - 'auto'=自动结算, 'manual'=用户核销
+ * TODO: 待移动提供正式接口地址和鉴权方式
+ */
+async function notifyMobileSettle(coupon, settleType = 'auto') {
+  console.log('回传移动结算状态:', {
     mobileBenefitId: coupon.mobileBenefitId,
     mobileOrderId: coupon.mobileOrderId,
     couponId: coupon.couponId,
-    usedAt: coupon.usedAt,
+    settleType,
+    phone: coupon.phone,
     storeId: coupon.storeId
   });
 
-  // TODO: 移动提供接口后，在此处实现 HTTP 请求回传核销状态
-  // 示例：
-  // const https = require('https');
-  // await new Promise((resolve, reject) => {
-  //   const body = JSON.stringify({
-  //     benefitId: coupon.mobileBenefitId,
-  //     orderId: coupon.mobileOrderId,
-  //     status: 'used',
-  //     usedAt: coupon.usedAt,
-  //     storeId: coupon.storeId
-  //   });
-  //   const req = https.request({
-  //     hostname: 'mobile-api-host',
-  //     path: '/benefit/verify-callback',
-  //     method: 'POST',
-  //     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-  //   }, (res) => { res.on('data', () => {}); res.on('end', resolve); });
-  //   req.on('error', reject);
-  //   req.write(body);
-  //   req.end();
+  // TODO: 移动提供接口后实现 HTTP 请求
+  // const body = JSON.stringify({
+  //   benefitId: coupon.mobileBenefitId,
+  //   orderId: coupon.mobileOrderId,
+  //   status: 'used',  // 已核销
+  //   phone: coupon.phone,
+  //   storeId: coupon.storeId,
+  //   settleType: settleType  // auto / manual
   // });
 
-  // 记录回传时间
   await db.collection('coupons').doc(coupon._id).update({
     data: { mobileNotifiedAt: nowISO() }
   });
@@ -1014,8 +981,8 @@ async function handleAdminUpdateStatus(openId, event = {}) {
 
   await db.collection('contracts').doc(contract._id).update({ data: nextData });
   if (status === STATES.CONTRACT_OK) {
-    await ensureCouponsForContract({ ...contract, ...nextData });
-    // 自动注册：将客户手机号绑定到 openId，完成用户注册
+    // 合约办理完成，自动将手机号绑定到 openId，完成用户注册
+    // 代金券不再由合约触发，统一由移动回调 activateCoupon 生成
     await bindPhoneToUser(contract.openId, contract.phone);
   }
 
@@ -1609,57 +1576,114 @@ async function handleExportContracts(openId) {
  * @param {string} mobileOrderId - 移动订单ID
  * @param {string} authToken - 接口鉴权令牌
  */
+/**
+ * 中国移动权益回调：用户在移动平台领取权益后，智机惠生成代金券
+ * 券生成即激活（status=1），30天有效期
+ * 按手机号匹配门店：有合约记录则绑定门店，无合约记录则为通用券
+ */
 async function handleActivateCoupon(openId, event = {}) {
-  const { contractId, mobileBenefitId, mobileOrderId, authToken } = event;
+  const { phone, mobileBenefitId, mobileOrderId, authToken } = event;
 
   // 接口鉴权（移动对接时替换为正式令牌）
   if (!authToken || authToken !== 'zjh_callback_2024') {
     return { code: 403, message: 'unauthorized' };
   }
 
-  if (!contractId) {
-    return { code: 400, message: '缺少参数 contractId' };
+  if (!phone) {
+    return { code: 400, message: '缺少参数 phone' };
+  }
+
+  // 检查该手机号是否已有可用代金券（避免重复领取）
+  const existingRes = await db.collection('coupons').where({
+    phone,
+    status: _.in([1])  // 可使用
+  }).limit(1).get();
+  if (existingRes.data && existingRes.data.length > 0) {
+    return { code: 400, message: '该手机号已有可用代金券，请先使用或等待过期' };
   }
 
   const now = nowISO();
-  const couponsCollection = db.collection('coupons');
 
-  // 查找该合约下待激活的券
-  const res = await couponsCollection.where({
-    contractId,
-    status: 0
-  }).get();
-
-  if (res.data.length === 0) {
-    return { code: 404, message: '未找到待激活的券或已激活' };
+  // 按手机号匹配最近合约，获取门店信息
+  let storeId = '';
+  let storeName = '';
+  let contractId = '';
+  try {
+    const contractRes = await db.collection('contracts').where({
+      phone,
+      status: _.gte(STATES.CONTRACT_OK)  // 已完成的合约
+    }).orderBy('createdAt', 'desc').limit(1).get();
+    if (contractRes.data && contractRes.data.length > 0) {
+      const c = contractRes.data[0];
+      storeId = c.storeId || '';
+      storeName = c.storeName || '';
+      contractId = c.contractId || '';
+    }
+  } catch (e) {
+    console.error('匹配合约门店失败:', e);
   }
 
-  // 激活券：状态 0→1，记录移动权益信息，重新计算30天有效期
-  const activateDate = now;
-  const expireAt = new Date(activateDate);
+  // 查询代金券面额规则
+  let amount = 20;
+  let ruleId = '';
+  try {
+    const rulesRes = await db.collection('coupon_rules').where({ status: 1 }).get();
+    const rules = rulesRes.data || [];
+    for (const r of rules) {
+      if (r.storeScope === 'all') { amount = r.amount || 20; ruleId = r.id || r._id || ''; break; }
+      if (r.storeScope === 'bound' && storeId && r.selectedStores && r.selectedStores.includes(storeId)) {
+        amount = r.amount || 20; ruleId = r.id || r._id || ''; break;
+      }
+    }
+  } catch (e) { /* use default */ }
+
+  // 30天有效期
+  const expireAt = new Date(now);
   expireAt.setDate(expireAt.getDate() + 30);
 
-  const updatePromises = res.data.map(c => {
-    return couponsCollection.doc(c._id).update({
-      data: {
-        status: 1,
-        activateDate,
-        expireAt: expireAt.toISOString(),
-        mobileBenefitId: mobileBenefitId || '',
-        mobileOrderId: mobileOrderId || '',
-        updatedAt: now
-      }
-    });
-  });
+  // 随机结算时间：在有效期内随机一个白天时间自动回传移动
+  const settleRandomDays = Math.floor(Math.random() * 25) + 1; // 1~25天后
+  const settleAt = new Date(now);
+  settleAt.setDate(settleAt.getDate() + settleRandomDays);
+  // 随机白天时间 9:00~18:00
+  settleAt.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 60), 0, 0);
 
-  await Promise.all(updatePromises);
+  const couponData = {
+    couponId: genId('CP'),
+    contractId,
+    openId: '',  // 用户登录绑定手机号后填充
+    phone,
+    storeId,
+    storeName,
+    amount,
+    ruleId,
+    status: 1,  // 生成即激活，可直接使用
+    activateDate: now,
+    expireAt: expireAt.toISOString(),
+    usedCount: 0,
+    verifyCode: '',
+    verifyExpireAt: 0,
+    usedAt: '',
+    mobileBenefitId: mobileBenefitId || '',
+    mobileOrderId: mobileOrderId || '',
+    settleType: '',    // auto=自动结算, manual=用户核销
+    settleAt: settleAt.toISOString(),  // 计划自动结算时间
+    mobileNotifiedAt: '',
+    createdAt: now,
+    updatedAt: now
+  };
+
+  await db.collection('coupons').add({ data: couponData });
 
   return {
     code: 200,
     message: 'ok',
     data: {
-      activatedCount: res.data.length,
-      contractId,
+      couponId: couponData.couponId,
+      phone,
+      storeId: storeId || null,
+      storeName: storeName || null,
+      amount,
       expireAt: expireAt.toISOString()
     }
   };
