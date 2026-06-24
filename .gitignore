@@ -10,12 +10,14 @@ project.private.config.json
 
 # IDE / 工具
 .claude
+.trae
 .DS_Store
 *.log
 
 # 文档附件（非代码）
 *.docx
 *.txt
+*.pdf
 
 # 测试工具
 minitest

@@ -689,7 +689,7 @@ const mockAPI = {
   },
 
   // 门店：确认核销
-  storeConfirmVerify(couponId) {
+  storeConfirmVerify(couponId, verifyCode) {
     return new Promise(resolve => {
       setTimeout(() => {
         const data = this.getDB();
