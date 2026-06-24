@@ -417,7 +417,7 @@ Page({
     this.setData({ verifying: true });
 
     try {
-      const res = await businessAPI.storeConfirmVerify(this.data.confirmInfo.couponId);
+      const res = await businessAPI.storeConfirmVerify(this.data.confirmInfo.couponId, this.data.verifyCode);
 
       if (res.code === 200) {
         // 更新确认信息，包含剩余次数

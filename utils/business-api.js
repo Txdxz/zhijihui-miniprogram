@@ -104,10 +104,6 @@ const businessAPI = {
     return _callPortalBiz('getCoupons', {});
   },
 
-  activateCoupon(phone, mobileBenefitId, mobileOrderId, authToken) {
-    return _callPortalBiz('activateCoupon', { phone, mobileBenefitId, mobileOrderId, authToken });
-  },
-
   generateVerifyCode(couponId) {
     return _callPortalBiz('generateVerifyCode', { couponId });
   },
@@ -116,8 +112,8 @@ const businessAPI = {
     return _callPortalBiz('storeVerifyCoupon', { verifyCode, storeId });
   },
 
-  storeConfirmVerify(couponId) {
-    return _callPortalBiz('storeConfirmVerify', { couponId });
+  storeConfirmVerify(couponId, verifyCode) {
+    return _callPortalBiz('storeConfirmVerify', { couponId, verifyCode });
   },
 
   getStoreVerifyRecords(storeId) {

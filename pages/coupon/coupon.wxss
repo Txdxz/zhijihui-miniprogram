@@ -96,6 +96,42 @@
   margin-top: 8rpx;
 }
 
+/* 客服电话区块 */
+.service-sheet {
+  margin-top: 8rpx;
+  padding: 32rpx;
+  text-align: center;
+}
+
+.service-title {
+  display: block;
+  font-size: 28rpx;
+  color: #999;
+  margin-bottom: 12rpx;
+}
+
+.service-phone {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1989fa;
+  margin-bottom: 8rpx;
+}
+
+.service-time {
+  display: block;
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 有效期展示 */
+.coupon-expire {
+  display: block;
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 8rpx;
+}
+
 .tabbar-spacer {
   height: calc(112rpx + env(safe-area-inset-bottom));
 }
@@ -538,6 +574,49 @@
   color: #666666;
   line-height: 1.6;
   flex: 1;
+}
+
+/* ========== 权益内容区块 ========== */
+.benefit-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+  background: #F5F9FF;
+  border-radius: 12rpx;
+  margin-bottom: 24rpx;
+}
+
+.benefit-label {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1677FF;
+}
+
+.benefit-text {
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.6;
+  flex: 1;
+}
+
+/* ========== 适用门店列表 ========== */
+.store-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  flex: 1;
+  gap: 0;
+}
+
+.store-title {
+  font-weight: 600;
+  color: #333333;
+}
+
+.store-item {
+  color: #666666;
 }
 
 /* ========== 核销码弹窗（微信规范：简洁优雅） ========== */

@@ -24,6 +24,7 @@ Page({
     totalCount: 0,
     availableCount: 0,
     usedCount: 0,
+    servicePhone: '4007071506',
 
     // 核销码弹窗
     showModal: false,
@@ -174,6 +175,17 @@ Page({
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  },
+
+  // ==========================================
+  // 客服电话
+  // ==========================================
+
+  callCustomerService() {
+    wx.makePhoneCall({
+      phoneNumber: this.data.servicePhone,
+      fail: () => {}
+    });
   },
 
   // ==========================================

@@ -659,9 +659,18 @@ async function handleGetCoupons(openId, event = {}) {
 
   const res = await db.collection('coupons').where(query).orderBy('createdAt', 'desc').get();
 
-  // 懒触发自动结算：查询时检查是否到了结算时间
+  // 过期券状态修正 + 懒触发自动结算
+  const now = new Date();
   for (const c of res.data) {
-    if (c.status === 1 && !c.settleType && c.settleAt && new Date(c.settleAt) <= new Date()) {
+    // 过期券状态修正：status=1 但已过期 → 标记为 status=3
+    if (c.status === 1 && c.expireAt && new Date(c.expireAt) < now) {
+      await db.collection('coupons').doc(c._id).update({
+        data: { status: 3, updatedAt: nowISO() }
+      }).catch(() => {});
+      c.status = 3;
+    }
+    // 懒触发自动结算：查询时检查是否到了结算时间
+    if (c.status === 1 && !c.settleType && c.settleAt && new Date(c.settleAt) <= now) {
       tryAutoSettle(c);
     }
   }
@@ -750,20 +759,23 @@ async function handleStoreVerifyCoupon(openId, event = {}) {
 
 async function handleStoreConfirmVerify(openId, event = {}) {
   const couponId = String(event.couponId || '').trim();
-  if (!couponId) return { code: 400, message: '缺少代金券标识' };
+  const verifyCode = String(event.verifyCode || '').trim();
+  if (!couponId || !verifyCode) return { code: 400, message: '参数不完整' };
 
   const res = await db.collection('coupons').where({ couponId }).limit(1).get();
   const coupon = res.data && res.data[0];
   if (!coupon) return { code: 404, message: '代金券不存在' };
 
+  // 校验核销码
+  if (coupon.verifyCode !== verifyCode) return { code: 400, message: '核销码不正确' };
+  if (!coupon.verifyExpireAt || Number(coupon.verifyExpireAt) <= Date.now()) {
+    return { code: 400, message: '核销码已过期，请让客户重新生成' };
+  }
+
   const canVerify = await ensureStoreRole(openId, coupon.storeId);
   if (!canVerify) return { code: 403, message: '当前账号无门店核销权限' };
 
-  if (Number(coupon.status) !== 1) {
-    return { code: 400, message: '该券不可核销' };
-  }
-
-  // 检查是否过期
+  // 过期检查
   if (coupon.expireAt && new Date(coupon.expireAt) < new Date()) {
     await db.collection('coupons').doc(coupon._id).update({
       data: { status: 3, updatedAt: nowISO() }
@@ -771,29 +783,34 @@ async function handleStoreConfirmVerify(openId, event = {}) {
     return { code: 400, message: '该券已过期' };
   }
 
+  // 条件更新：仅当 status=1 时才核销（并发保护）
   const now = nowISO();
-  await db.collection('coupons').doc(coupon._id).update({
-    data: {
-      status: 2,
-      usedCount: Number(coupon.usedCount || 0) + 1,
-      usedAt: now,
-      verifyCode: '',
-      verifyExpireAt: 0,
-      settleType: 'manual',  // 用户主动核销
-      settleAt: now,
-      updatedAt: now
-    }
-  });
+  const result = await db.collection('coupons')
+    .where({ _id: coupon._id, status: 1 })
+    .update({
+      data: {
+        status: 2,
+        usedCount: Number(coupon.usedCount || 0) + 1,
+        usedAt: now,
+        verifyCode: '',
+        verifyExpireAt: 0,
+        settleType: 'manual',
+        settleAt: now,
+        updatedAt: now
+      }
+    });
+
+  if (!result.stats || !result.stats.updated) {
+    return { code: 400, message: '该券不可核销或已被核销' };
+  }
 
   const updatedRes = await db.collection('coupons').where({ couponId }).limit(1).get();
   const updated = updatedRes.data && updatedRes.data[0];
 
-  // 核销状态回传中国移动（异步，不阻塞核销结果返回）
-  if (updated.mobileBenefitId) {
-    notifyMobileSettle(updated, 'manual').catch(err => {
-      console.error('手动核销回传移动失败:', err);
-    });
-  }
+  // 核销状态回传世纪恒通（异步，不阻塞核销结果返回）
+  notifyMobileSettle(updated, 'manual').catch(err => {
+    console.error('手动核销回传世纪恒通失败:', err);
+  });
 
   return {
     code: 200,
@@ -802,61 +819,42 @@ async function handleStoreConfirmVerify(openId, event = {}) {
 }
 
 /**
- * 核销状态回传中国移动
- * TODO: 待移动提供正式接口地址和鉴权方式后补充实现
- */
-/**
  * 懒触发自动结算：在查询券或生成核销码时检查是否到了结算时间
- * 到了结算时间且尚未结算 → 自动向移动回传"已核销"状态
- * 结算后券仍可正常使用，settleType='auto' 记录为自动结算
+ * 到了结算时间且尚未结算 → 自动向世纪恒通回传"已核销"状态
+ * 结算后券仍可正常使用，settleType='auto' 仅记录已回传状态
+ * 使用条件更新（CAS）防止并发重复结算
  */
 async function tryAutoSettle(coupon) {
   if (!coupon || !coupon._id) return;
   if (coupon.settleType) return; // 已结算，跳过
 
   const now = nowISO();
-  await db.collection('coupons').doc(coupon._id).update({
-    data: {
-      settleType: 'auto',
-      settleAt: now,
-      updatedAt: now
-    }
-  });
+  // 条件更新：仅当 settleType 为空时才更新（并发保护）
+  const result = await db.collection('coupons')
+    .where({ _id: coupon._id, settleType: _.or(_.eq(''), _.exists(false)) })
+    .update({
+      data: {
+        settleType: 'auto',
+        settleAt: now,
+        updatedAt: now
+      }
+    });
 
-  // 异步回传移动（不阻塞主流程）
+  if (!result.stats || !result.stats.updated) return; // 已被其他请求结算
+
+  // 异步回传世纪恒通（不阻塞主流程）
   notifyMobileSettle(coupon, 'auto').catch(err => {
-    console.error('自动结算回传移动失败:', err);
+    console.error('自动结算回传世纪恒通失败:', err);
   });
 }
 
 /**
- * 回传结算状态给中国移动
+ * 回传结算状态给世纪恒通（通过 mobileIntegration 云函数）
  * @param {string} settleType - 'auto'=自动结算, 'manual'=用户核销
- * TODO: 待移动提供正式接口地址和鉴权方式
  */
 async function notifyMobileSettle(coupon, settleType = 'auto') {
-  console.log('回传移动结算状态:', {
-    mobileBenefitId: coupon.mobileBenefitId,
-    mobileOrderId: coupon.mobileOrderId,
-    couponId: coupon.couponId,
-    settleType,
-    phone: coupon.phone,
-    storeId: coupon.storeId
-  });
-
-  // TODO: 移动提供接口后实现 HTTP 请求
-  // const body = JSON.stringify({
-  //   benefitId: coupon.mobileBenefitId,
-  //   orderId: coupon.mobileOrderId,
-  //   status: 'used',  // 已核销
-  //   phone: coupon.phone,
-  //   storeId: coupon.storeId,
-  //   settleType: settleType  // auto / manual
-  // });
-
-  await db.collection('coupons').doc(coupon._id).update({
-    data: { mobileNotifiedAt: nowISO() }
-  });
+  const mobileIntegration = require('./mobileIntegration/index');
+  await mobileIntegration.notifyHengtongSettle(coupon, settleType);
 }
 
 async function handleGetStoreVerifyRecords(openId, event = {}) {
@@ -982,7 +980,7 @@ async function handleAdminUpdateStatus(openId, event = {}) {
   await db.collection('contracts').doc(contract._id).update({ data: nextData });
   if (status === STATES.CONTRACT_OK) {
     // 合约办理完成，自动将手机号绑定到 openId，完成用户注册
-    // 代金券不再由合约触发，统一由移动回调 activateCoupon 生成
+    // 代金券由世纪恒通 /order/create 接口生成（mobileIntegration 云函数）
     await bindPhoneToUser(contract.openId, contract.phone);
   }
 
@@ -1569,127 +1567,6 @@ async function handleExportContracts(openId) {
 }
 
 /**
- * 移动回调：用户在移动平台领取权益后激活代金券
- * 由中国移动权益优选小程序在用户领取后回调
- * @param {string} contractId - 合约ID
- * @param {string} mobileBenefitId - 移动权益ID
- * @param {string} mobileOrderId - 移动订单ID
- * @param {string} authToken - 接口鉴权令牌
- */
-/**
- * 中国移动权益回调：用户在移动平台领取权益后，智机惠生成代金券
- * 券生成即激活（status=1），30天有效期
- * 按手机号匹配门店：有合约记录则绑定门店，无合约记录则为通用券
- */
-async function handleActivateCoupon(openId, event = {}) {
-  const { phone, mobileBenefitId, mobileOrderId, authToken } = event;
-
-  // 接口鉴权（移动对接时替换为正式令牌）
-  if (!authToken || authToken !== 'zjh_callback_2024') {
-    return { code: 403, message: 'unauthorized' };
-  }
-
-  if (!phone) {
-    return { code: 400, message: '缺少参数 phone' };
-  }
-
-  // 检查该手机号是否已有可用代金券（避免重复领取）
-  const existingRes = await db.collection('coupons').where({
-    phone,
-    status: _.in([1])  // 可使用
-  }).limit(1).get();
-  if (existingRes.data && existingRes.data.length > 0) {
-    return { code: 400, message: '该手机号已有可用代金券，请先使用或等待过期' };
-  }
-
-  const now = nowISO();
-
-  // 按手机号匹配最近合约，获取门店信息
-  let storeId = '';
-  let storeName = '';
-  let contractId = '';
-  try {
-    const contractRes = await db.collection('contracts').where({
-      phone,
-      status: _.gte(STATES.CONTRACT_OK)  // 已完成的合约
-    }).orderBy('createdAt', 'desc').limit(1).get();
-    if (contractRes.data && contractRes.data.length > 0) {
-      const c = contractRes.data[0];
-      storeId = c.storeId || '';
-      storeName = c.storeName || '';
-      contractId = c.contractId || '';
-    }
-  } catch (e) {
-    console.error('匹配合约门店失败:', e);
-  }
-
-  // 查询代金券面额规则
-  let amount = 20;
-  let ruleId = '';
-  try {
-    const rulesRes = await db.collection('coupon_rules').where({ status: 1 }).get();
-    const rules = rulesRes.data || [];
-    for (const r of rules) {
-      if (r.storeScope === 'all') { amount = r.amount || 20; ruleId = r.id || r._id || ''; break; }
-      if (r.storeScope === 'bound' && storeId && r.selectedStores && r.selectedStores.includes(storeId)) {
-        amount = r.amount || 20; ruleId = r.id || r._id || ''; break;
-      }
-    }
-  } catch (e) { /* use default */ }
-
-  // 30天有效期
-  const expireAt = new Date(now);
-  expireAt.setDate(expireAt.getDate() + 30);
-
-  // 随机结算时间：在有效期内随机一个白天时间自动回传移动
-  const settleRandomDays = Math.floor(Math.random() * 25) + 1; // 1~25天后
-  const settleAt = new Date(now);
-  settleAt.setDate(settleAt.getDate() + settleRandomDays);
-  // 随机白天时间 9:00~18:00
-  settleAt.setHours(9 + Math.floor(Math.random() * 9), Math.floor(Math.random() * 60), 0, 0);
-
-  const couponData = {
-    couponId: genId('CP'),
-    contractId,
-    openId: '',  // 用户登录绑定手机号后填充
-    phone,
-    storeId,
-    storeName,
-    amount,
-    ruleId,
-    status: 1,  // 生成即激活，可直接使用
-    activateDate: now,
-    expireAt: expireAt.toISOString(),
-    usedCount: 0,
-    verifyCode: '',
-    verifyExpireAt: 0,
-    usedAt: '',
-    mobileBenefitId: mobileBenefitId || '',
-    mobileOrderId: mobileOrderId || '',
-    settleType: '',    // auto=自动结算, manual=用户核销
-    settleAt: settleAt.toISOString(),  // 计划自动结算时间
-    mobileNotifiedAt: '',
-    createdAt: now,
-    updatedAt: now
-  };
-
-  await db.collection('coupons').add({ data: couponData });
-
-  return {
-    code: 200,
-    message: 'ok',
-    data: {
-      couponId: couponData.couponId,
-      phone,
-      storeId: storeId || null,
-      storeName: storeName || null,
-      amount,
-      expireAt: expireAt.toISOString()
-    }
-  };
-}
-
-/**
  * 生成管理员扫码登录的小程序码
  */
 /**
@@ -1830,7 +1707,6 @@ exports.main = async (event = {}) => {
     if (action === 'submitOrderInfo') return handleSubmitOrderInfo(OPENID, event);
     if (action === 'submitSmsCode') return handleSubmitSmsCode(OPENID, event);
     if (action === 'getCoupons') return handleGetCoupons(OPENID, event);
-    if (action === 'activateCoupon') return handleActivateCoupon(OPENID, event);
     if (action === 'generateVerifyCode') return handleGenerateVerifyCode(OPENID, event);
     if (action === 'storeVerifyCoupon') return handleStoreVerifyCoupon(OPENID, event);
     if (action === 'storeConfirmVerify') return handleStoreConfirmVerify(OPENID, event);

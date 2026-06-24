@@ -12,12 +12,12 @@
   <block wx:else>
   <view class="hero">
     <text class="hero-title">我的卡包</text>
-    <text class="hero-sub">合约办理成功即可获得权益礼包</text>
+    <text class="hero-sub">在移动权益平台领取后，代金券将自动到账</text>
   </view>
 
   <view class="sheet" wx:if="{{!hasContract}}">
-    <van-empty description="完成合约办理后即可获得代金券">
-      <van-button type="primary" size="small" round custom-class="empty-btn" bind:click="goToIndex">去办理合约</van-button>
+    <van-empty description="暂无代金券，请在移动权益平台领取后再查看">
+      <van-button type="primary" size="small" round custom-class="empty-btn" bind:click="goToIndex">返回首页</van-button>
     </van-empty>
   </view>
 
@@ -48,32 +48,17 @@
             <text class="coupon-yen">¥</text>
             <text class="coupon-num">{{item.amount}}</text>
           </view>
-          <text class="coupon-store">限【{{item.storeName}}】使用</text>
+          <text class="coupon-store">限【{{item.storeName || '所有适用门店'}}】使用</text>
         </view>
         <view class="coupon-right">
-          <text class="coupon-period">第 {{item.period}} 期 · {{item.periodMonth}}</text>
-          <view class="coupon-status-box pending" wx:if="{{item.status === 0}}">
-            <text class="status-text">待激活</text>
-            <text class="status-hint">请登录【河北移动权益优选】小程序领取后激活</text>
-          </view>
-          <view class="coupon-status-box available" wx:if="{{item.status === 1 && !item.isNotCurrentMonth && !item.isMonthlyUsedUp}}">
+          <text class="coupon-expire">有效期至 {{item.expireDate}}</text>
+          <view class="coupon-status-box available" wx:if="{{item.status === 1}}">
             <text class="status-text">可使用</text>
-            <text class="status-hint" wx:if="{{item.monthlyLimit > 1}}">本月剩余 {{item.remainingTimes}}/{{item.monthlyLimit}} 次</text>
-            <text class="status-hint" wx:else>到店出示给店员</text>
+            <text class="status-hint">到店出示给店员</text>
             <van-button type="danger" size="small" round custom-class="use-btn" bind:click="showVerifyCode" data-id="{{item.id}}">立即使用</van-button>
           </view>
-          <view class="coupon-status-box monthly-used-up" wx:if="{{item.status === 1 && !item.isNotCurrentMonth && item.isMonthlyUsedUp}}">
-            <text class="status-text used">本月已用完</text>
-            <text class="status-hint">已使用 {{item.usedTimes}} 次，下月恢复</text>
-          </view>
-          <view class="coupon-status-box not-current-month" wx:if="{{item.status === 1 && item.isNotCurrentMonth}}">
-            <text class="status-text muted">非当月</text>
-            <text class="status-hint">仅限 {{item.periodMonth}} 使用</text>
-            <van-button type="default" size="small" round custom-class="use-btn muted-btn" bind:click="showVerifyCode" data-id="{{item.id}}">查看详情</van-button>
-          </view>
           <view class="coupon-status-box used" wx:if="{{item.status === 2}}">
-            <text class="status-text used">本月已用完</text>
-            <text class="status-hint">已使用 {{item.usedTimes || 0}} 次</text>
+            <text class="status-text used">已核销</text>
           </view>
           <view class="coupon-status-box expired" wx:if="{{item.status === 3}}">
             <text class="status-text">已过期</text>
@@ -83,15 +68,19 @@
     </view>
 
     <view class="sheet tips-sheet">
+      <view class="benefit-content">
+        <text class="benefit-label">权益内容</text>
+        <text class="benefit-text">宠物门店服务类商品代金券一张</text>
+      </view>
       <text class="tips-title">使用说明</text>
       <view class="tips-list">
         <view class="tips-item">
           <text class="tips-num">1</text>
-          <text class="tips-text">领取权益：订购成功后，登录【河北移动权益优选】小程序，使用办理业务手机号领取代金券即可激活</text>
+          <text class="tips-text">领取权益：用户订购权益成功后，在【河北移动权益优选】小程序页面，点击我的-我的订单或点击链接 https://dx.10086.cn/0oqmu6Rz 至微信小程序打开，找到订单页点击【去使用】，点击优惠券即可领取优惠</text>
         </view>
         <view class="tips-item">
           <text class="tips-num">2</text>
-          <text class="tips-text">查看权益：代金券激活后，返回本小程序「我的卡包」即可查看</text>
+          <text class="tips-text">兑换权益：领取优惠券后，微信搜索【智机惠】小程序，使用权益领取手机号登录，点击我的卡包，点击优惠券向店员核销使用</text>
         </view>
         <view class="tips-item">
           <text class="tips-num">3</text>
@@ -99,9 +88,36 @@
         </view>
         <view class="tips-item">
           <text class="tips-num">4</text>
-          <text class="tips-text">权益规则：代金券自激活当月内有效，每笔订单限用 1 张，每月限激活 1 张</text>
+          <text class="tips-text">代金券自领取到账之日起当月有效，当月未领取自动失效，不可转赠他人，请在有效期内使用，过期不补</text>
+        </view>
+        <view class="tips-item">
+          <text class="tips-num">5</text>
+          <text class="tips-text">单次限用一张券，本优惠为虚拟产品一经领取，不退不换、不兑现、不找零、不可拆分使用，请您核对好后再行领取</text>
+        </view>
+        <view class="tips-item">
+          <text class="tips-num">6</text>
+          <text class="tips-text">该产品一旦下发不支持退换，请您领取使用前先致电商家详询具体可使用的商品/服务范围、是否需要预约等内容，以商家解释为准，以免无法使用造成不必要的损失</text>
+        </view>
+        <view class="tips-item">
+          <text class="tips-num">7</text>
+          <view class="store-list">
+            <text class="tips-text store-title">适用门店：</text>
+            <text class="tips-text store-item">猫庄宠物用品超市(众创大厦店)、</text>
+            <text class="tips-text store-item">裕华小甄宠物用品店、</text>
+            <text class="tips-text store-item">猫庄·宠物生活馆、</text>
+            <text class="tips-text store-item">小鹿宠物(盛邦花园六区店)、</text>
+            <text class="tips-text store-item">有猫腻宠物生活馆、</text>
+            <text class="tips-text store-item">芊宠萌宠物服务、</text>
+            <text class="tips-text store-item">安淇宠物医院（秦皇岛店）</text>
+          </view>
         </view>
       </view>
+    </view>
+
+    <view class="sheet service-sheet">
+      <text class="service-title">客服电话</text>
+      <text class="service-phone" bindtap="callCustomerService">4007071506</text>
+      <text class="service-time">服务时间：09:00-17:30（周一至周五）</text>
     </view>
   </block>
 

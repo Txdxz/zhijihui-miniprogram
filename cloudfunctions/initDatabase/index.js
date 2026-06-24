@@ -316,6 +316,21 @@ exports.main = async (event, context) => {
       await db.collection('coupons').createIndex({
         status: 1
       });
+      await db.collection('coupons').createIndex({
+        couponId: 1
+      });
+      await db.collection('coupons').createIndex({
+        expireAt: 1
+      });
+      await db.collection('coupons').createIndex({
+        settleAt: 1
+      });
+      await db.collection('coupons').createIndex({
+        mobileOrderId: 1
+      });
+      await db.collection('coupons').createIndex({
+        hengtongOrderNo: 1
+      });
 
       // 为 stores 集合添加索引
       await db.collection('stores').createIndex({
